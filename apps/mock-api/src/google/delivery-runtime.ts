@@ -26,6 +26,8 @@ export interface SheetsDeliveryRuntimeDeps {
   fetchImpl?: typeof fetch;
   now?: () => number;
   log?: (message: string) => void;
+  /** Часовой пояс владельца для даты в таблице. */
+  timeZoneOf?: (userId: string) => string | null;
 }
 
 export function brokenConnectionText(
@@ -60,6 +62,7 @@ export function createSheetsDelivery(deps: SheetsDeliveryRuntimeDeps): SheetsDel
     enabled: (userId) =>
       userId === undefined ? googleSheetsEnabledForAnyone() : googleSheetsEnabledFor(userId),
     siteUrl: deps.siteUrl,
+    ...(deps.timeZoneOf ? { timeZoneOf: deps.timeZoneOf } : {}),
     ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
     ...(deps.now ? { now: deps.now } : {}),
     ...(deps.log ? { log: deps.log } : {}),

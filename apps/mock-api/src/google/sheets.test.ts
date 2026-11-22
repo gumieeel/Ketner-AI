@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CELL_LIMIT, LEAD_SHEET_COLUMNS, leadRow, neutralizeFormula } from './sheets.js';
+import {
+  CELL_LIMIT,
+  LEAD_SHEET_COLUMNS,
+  LEAD_SHEET_WIDTHS,
+  formatLeadDate,
+  leadRow,
+  leadSheetHeaders,
+  leadSpreadsheetBody,
+  neutralizeFormula,
+  validTimeZone,
+} from './sheets.js';
 
 test('значения посетителя, похожие на формулу, получают апостроф: = + - @ табуляция, возврат каретки', () => {
   for (const value of [
@@ -58,4 +68,66 @@ test('апостроф учитывается в пределе ячейки', (
   assert.equal(row[4]!.length, CELL_LIMIT);
   assert.ok(row[4]!.startsWith("'="));
   assert.ok(row[4]!.endsWith('…'));
+});
+
+test('дата заявки: в поясе владельца, если он известен; иначе UTC с пометкой', () => {
+  // 06:35 UTC — 11:35 в Кызылорде (UTC+5), как у заявки владельца на проверке.
+  assert.equal(formatLeadDate('2026-11-22T06:35:10.000Z', 'Asia/Qyzylorda'), '2026-11-22 11:35');
+  assert.equal(formatLeadDate('2026-11-22T22:10:00.000Z', 'Asia/Almaty'), '2026-11-23 03:10');
+  assert.equal(formatLeadDate('2026-11-22T06:35:10.000Z'), '2026-11-22 06:35 UTC');
+  assert.equal(formatLeadDate('2026-11-22T06:35:10.000Z', 'Not/AZone'), '2026-11-22 06:35 UTC');
+  assert.equal(validTimeZone('Asia/Qyzylorda'), 'Asia/Qyzylorda');
+  assert.equal(validTimeZone('Europe/Moscow; drop'), null);
+  assert.equal(validTimeZone(42), null);
+  const row = leadRow({
+    createdAt: '2026-11-22T06:35:10.000Z',
+    botName: 'Бот',
+    name: 'Анна',
+    contact: 'anna@example.com',
+    question: 'Вопрос',
+    dialogUrl: 'https://ketner.org/solutions/s1',
+    leadId: 'lead-1',
+    timeZone: 'Asia/Qyzylorda',
+  });
+  assert.equal(row[0], '2026-11-22 11:35');
+});
+
+test('новая таблица: заголовок жирным, первая строка закреплена, ширина колонок, пояс владельца', () => {
+  type Body = {
+    properties: { title: string; timeZone?: string };
+    sheets: Array<{
+      properties: { gridProperties: { frozenRowCount: number } };
+      data: Array<{
+        rowData: Array<{
+          values: Array<{
+            userEnteredValue: { stringValue: string };
+            userEnteredFormat: { textFormat: { bold: boolean } };
+          }>;
+        }>;
+        columnMetadata: Array<{ pixelSize: number }>;
+      }>;
+    }>;
+  };
+  const known = leadSpreadsheetBody('Asia/Qyzylorda') as Body;
+  assert.equal(known.properties.timeZone, 'Asia/Qyzylorda');
+  assert.equal(known.sheets[0]!.properties.gridProperties.frozenRowCount, 1);
+  const header = known.sheets[0]!.data[0]!.rowData[0]!.values;
+  assert.deepEqual(
+    header.map((cell) => cell.userEnteredValue.stringValue),
+    ['Дата', ...LEAD_SHEET_COLUMNS.slice(1)],
+  );
+  assert.ok(header.every((cell) => cell.userEnteredFormat.textFormat.bold));
+  assert.deepEqual(
+    known.sheets[0]!.data[0]!.columnMetadata.map((column) => column.pixelSize),
+    [...LEAD_SHEET_WIDTHS],
+  );
+  assert.equal(LEAD_SHEET_WIDTHS.length, LEAD_SHEET_COLUMNS.length);
+
+  const unknown = leadSpreadsheetBody(null) as Body;
+  assert.equal(unknown.properties.timeZone, undefined);
+  assert.equal(
+    unknown.sheets[0]!.data[0]!.rowData[0]!.values[0]!.userEnteredValue.stringValue,
+    'Дата (UTC)',
+  );
+  assert.deepEqual(leadSheetHeaders('Asia/Qyzylorda')[0], 'Дата');
 });

@@ -19,6 +19,7 @@ import {
 import { GoogleSheetsError, createLeadSpreadsheet } from '../google/sheets.js';
 import type { GoogleVerifierStore } from '../google/verifier-store.js';
 import type { SheetsDelivery } from '../google/delivery.js';
+import type { GooglePrefsStore } from '../google/prefs.js';
 import type { BuilderStore } from '../builder/store.js';
 
 export interface GoogleIntegrationRouterDeps {
@@ -32,6 +33,8 @@ export interface GoogleIntegrationRouterDeps {
   delivery?: SheetsDelivery;
   /** Заявки бота владельца (для отметок в кабинете). */
   leads?: () => Pick<BuilderStore, 'listLeads'> | null;
+  /** Часовой пояс владельца: браузер присылает его при подключении и открытии кабинета. */
+  prefs?: GooglePrefsStore;
 }
 
 /** Что видит сайт: без токенов и без `sub`. */
@@ -65,6 +68,7 @@ export function createGoogleIntegrationRouter({
   log: injectedLog,
   delivery,
   leads,
+  prefs,
 }: GoogleIntegrationRouterDeps): Router {
   const settings = injected ?? googleOAuthSettings;
   const fetchImpl = injectedFetch ?? fetch;
@@ -88,6 +92,8 @@ export function createGoogleIntegrationRouter({
 
   router.get(base, requireAuth, async (request: Request, response: Response) => {
     const userId = request.user!.id;
+    // Пояс браузера владельца — для дат в таблице (?timeZone=Asia/Qyzylorda).
+    prefs?.rememberTimeZone(userId, request.query.timeZone);
     const connection = store.get(userId);
     response.json({
       ...publicStatus(connection),
@@ -184,6 +190,10 @@ export function createGoogleIntegrationRouter({
       return;
     }
     try {
+      prefs?.rememberTimeZone(
+        userId,
+        (request.body as { timeZone?: unknown } | undefined)?.timeZone,
+      );
       response.json(publicStatus(await delivery.newSheet(userId)));
     } catch (error) {
       const code = error instanceof GoogleSheetsError ? error.code : 'sheet_not_created';
@@ -203,7 +213,8 @@ export function createGoogleIntegrationRouter({
 
   router.post(`${base}/start`, requireAuth, async (request: Request, response: Response) => {
     const oauth = settings()!;
-    const body = (request.body ?? {}) as { returnTo?: unknown };
+    const body = (request.body ?? {}) as { returnTo?: unknown; timeZone?: unknown };
+    prefs?.rememberTimeZone(request.user!.id, body.timeZone);
     const returnTo = safeReturnTo(body.returnTo) ?? fallbackReturnTo();
     const { state, nonce, expiresAt } = createGoogleState(request.user!.id, returnTo);
     const verifier = createCodeVerifier();
@@ -235,7 +246,8 @@ export function createGoogleIntegrationRouter({
   router.post(`${base}/confirm`, requireAuth, async (request: Request, response: Response) => {
     const oauth = settings()!;
     const userId = request.user!.id;
-    const body = (request.body ?? {}) as { code?: unknown; state?: unknown };
+    const body = (request.body ?? {}) as { code?: unknown; state?: unknown; timeZone?: unknown };
+    prefs?.rememberTimeZone(userId, body.timeZone);
     if (typeof body.code !== 'string' || typeof body.state !== 'string' || body.code.length > 512) {
       sendError(
         response,
@@ -285,7 +297,11 @@ export function createGoogleIntegrationRouter({
     let sheetErrorCode: string | null = null;
     if (!spreadsheet) {
       try {
-        spreadsheet = await createLeadSpreadsheet(grant.accessToken, fetchImpl);
+        spreadsheet = await createLeadSpreadsheet(
+          grant.accessToken,
+          fetchImpl,
+          prefs?.timeZoneOf(userId) ?? null,
+        );
       } catch (error) {
         sheetErrorCode = error instanceof GoogleSheetsError ? error.code : 'sheet_not_created';
         log(`[google] таблица заявок для аккаунта ${userId} не создана: ${sheetErrorCode}`);

@@ -16,6 +16,7 @@ import { billingLedger } from '../billing/index.js';
 import {
   googleConnectionStore,
   googleVerifierStore,
+  googlePrefsStore,
   supportStore,
   usageStore,
 } from '../store/index.js';
@@ -1103,6 +1104,7 @@ export async function initDatabaseSync(): Promise<boolean> {
         compareVoteStore,
         widgetInstallStore,
         accountTierStore,
+        googlePrefsStore.docs,
       ] as unknown as Array<DocStore<{ id: string }>>);
     } catch (error) {
       console.error('❌ [db] Журнал платежей не синхронизирован с PostgreSQL:', error);

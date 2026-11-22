@@ -22,12 +22,14 @@ import {
   githubConnectionStore as defaultGithubConnectionStore,
   googleConnectionStore as defaultGoogleConnectionStore,
   googleVerifierStore as defaultGoogleVerifierStore,
+  googlePrefsStore as defaultGooglePrefsStore,
 } from '../store/index.js';
 import type { GithubConnectionStore } from '../github/connection-store.js';
 import type { GithubOAuthSettings } from '../github/oauth.js';
 import type { GoogleConnectionStore } from '../google/connection-store.js';
 import type { GoogleOAuthSettings } from '../google/oauth.js';
 import type { GoogleVerifierStore } from '../google/verifier-store.js';
+import type { GooglePrefsStore } from '../google/prefs.js';
 import { BillingService, createBillingLedger } from '../billing/billing-service.js';
 import { billingService as defaultBillingService } from '../billing/index.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
@@ -116,6 +118,8 @@ export interface ApiDeps {
   googleSettings?: () => GoogleOAuthSettings | null;
   /** Доставка заявок в Google Таблицу; в тестах — своя (обход вызывается вручную). */
   googleDelivery?: SheetsDelivery;
+  /** Часовой пояс владельца для дат в Google Таблице; в тестах — в памяти. */
+  googlePrefsStore?: GooglePrefsStore;
   /** Платежи, подписки и возвраты. */
   billingService?: BillingService;
   ai: AiConfig;
@@ -399,6 +403,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   const activeWidgetInstalls = deps.widgetInstalls ?? defaultWidgetInstalls;
   // Доставка заявок в Google Таблицу (этап F, шаг 4): одна на сервер — для ботов и для кабинета.
   const activeGoogleStore = deps.googleConnectionStore ?? defaultGoogleConnectionStore;
+  const activeGooglePrefs = deps.googlePrefsStore ?? defaultGooglePrefsStore;
   const sheetsDelivery =
     deps.googleDelivery ??
     createSheetsDelivery({
@@ -406,6 +411,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       connections: activeGoogleStore,
       settings: deps.googleSettings ?? googleOAuthSettings,
       siteUrl,
+      timeZoneOf: (userId) => activeGooglePrefs.timeZoneOf(userId),
       ownerEmail: (userId) => activeUserStore.findById(userId)?.email ?? null,
       mailer: ownerMailer(deps),
       telegram: {
@@ -568,6 +574,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       settings: deps.googleSettings,
       delivery: sheetsDelivery,
       leads: () => platformStores()?.builder ?? null,
+      prefs: activeGooglePrefs,
     }),
   );
   // Чат закрыт (product-switches.ts): диалоги остаются в базе, API отвечает 503.

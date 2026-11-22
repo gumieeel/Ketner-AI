@@ -99,7 +99,7 @@ describe('Google Таблица в кабинете бота (этап F)', () =
 
   it('пилот (шаг 5a): карточку решает сервер — аккаунту из списка статус, остальным 503', async () => {
     cabinet((call) => {
-      if (call.path === '/api/integrations/google') return json(200, CONNECTED);
+      if (call.path.split('?')[0] === '/api/integrations/google') return json(200, CONNECTED);
       if (call.path.startsWith('/api/integrations/google/deliveries')) {
         return json(200, { states: { l1: 'written' } });
       }
@@ -111,12 +111,14 @@ describe('Google Таблица в кабинете бота (этап F)', () =
     pilot.unmount();
 
     const calls = cabinet((call) =>
-      call.path === '/api/integrations/google' ? CLOSED_RESPONSE() : null,
+      call.path.split('?')[0] === '/api/integrations/google' ? CLOSED_RESPONSE() : null,
     );
     renderRoute('/solutions/b1');
     expect(await screen.findByText('Анна', { exact: false })).toBeVisible();
     await waitFor(() =>
-      expect(calls.some((call) => call.path === '/api/integrations/google')).toBe(true),
+      expect(calls.some((call) => call.path.split('?')[0] === '/api/integrations/google')).toBe(
+        true,
+      ),
     );
     expect(screen.queryByTestId('google-sheet-card')).toBeNull();
     expect(screen.queryByText('Google Таблица')).toBeNull();
@@ -127,7 +129,7 @@ describe('Google Таблица в кабинете бота (этап F)', () =
     setProductSwitchesForTests({ googleSheets: true });
     let status: Record<string, unknown> = { ...CONNECTED, status: 'sheet_missing', pending: 1 };
     const calls = cabinet((call) => {
-      if (call.path === '/api/integrations/google') return json(200, status);
+      if (call.path.split('?')[0] === '/api/integrations/google') return json(200, status);
       if (call.path.startsWith('/api/integrations/google/deliveries'))
         return json(200, { states: {} });
       if (call.path === '/api/integrations/google/recheck') {
@@ -148,7 +150,7 @@ describe('Google Таблица в кабинете бота (этап F)', () =
   it('закрыто для аккаунта: ни карточки, ни отметок — только один запрос статуса (503)', async () => {
     setProductSwitchesForTests({ googleSheets: false });
     const calls = cabinet((call) =>
-      call.path === '/api/integrations/google' ? CLOSED_RESPONSE() : null,
+      call.path.split('?')[0] === '/api/integrations/google' ? CLOSED_RESPONSE() : null,
     );
     renderRoute('/solutions/b1');
     expect(await screen.findByText('Анна', { exact: false })).toBeVisible();
@@ -171,7 +173,7 @@ describe('Google Таблица в кабинете бота (этап F)', () =
       hash: '',
     });
     const calls = cabinet((call) => {
-      if (call.path === '/api/integrations/google') {
+      if (call.path.split('?')[0] === '/api/integrations/google') {
         return json(200, {
           connected: false,
           status: null,
@@ -198,13 +200,14 @@ describe('Google Таблица в кабинете бота (этап F)', () =
     );
     expect(calls.find((call) => call.path === '/api/integrations/google/start')?.body).toEqual({
       returnTo: 'http://localhost/solutions/b1',
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
   });
 
   it('подключено: ссылка на таблицу, отметки у заявок, «повторить» и «дописать пропущенные»', async () => {
     setProductSwitchesForTests({ googleSheets: true });
     const calls = cabinet((call) => {
-      if (call.path === '/api/integrations/google') return json(200, CONNECTED);
+      if (call.path.split('?')[0] === '/api/integrations/google') return json(200, CONNECTED);
       if (call.path === '/api/integrations/google/deliveries?solutionId=b1') {
         return json(200, { states: { l1: 'written', l2: 'failed', l3: 'waiting' } });
       }
@@ -246,7 +249,7 @@ describe('Google Таблица в кабинете бота (этап F)', () =
       pending: 2,
     };
     cabinet((call) => {
-      if (call.path === '/api/integrations/google') return json(200, status);
+      if (call.path.split('?')[0] === '/api/integrations/google') return json(200, status);
       if (call.path.startsWith('/api/integrations/google/deliveries'))
         return json(200, { states: {} });
       if (call.path === '/api/integrations/google/new-sheet') {
@@ -273,23 +276,31 @@ describe('Google Таблица в кабинете бота (этап F)', () =
     window.history.replaceState(null, '', '/solutions/b1#google_code=c-1&google_state=s-1');
     const calls = cabinet((call) => {
       if (call.path === '/api/integrations/google/confirm') return json(200, CONNECTED);
-      if (call.path === '/api/integrations/google') return json(200, CONNECTED);
+      if (call.path.split('?')[0] === '/api/integrations/google') return json(200, CONNECTED);
       if (call.path.startsWith('/api/integrations/google/deliveries'))
         return json(200, { states: {} });
       return null;
     });
     const view = renderRoute('/solutions/b1');
     expect(await screen.findByText('Google Таблица подключена.')).toBeVisible();
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     expect(calls.find((call) => call.path === '/api/integrations/google/confirm')?.body).toEqual({
       code: 'c-1',
       state: 's-1',
+      timeZone,
     });
+    // Статус несёт часовой пояс браузера — для дат в таблице.
+    expect(
+      calls.some(
+        (call) => call.path === `/api/integrations/google?timeZone=${encodeURIComponent(timeZone)}`,
+      ),
+    ).toBe(true);
     expect(window.location.hash).toBe('');
     view.unmount();
 
     window.history.replaceState(null, '', '/solutions/b1#google_error=denied');
     cabinet((call) => {
-      if (call.path === '/api/integrations/google') {
+      if (call.path.split('?')[0] === '/api/integrations/google') {
         return json(200, { ...CONNECTED, connected: false, status: null, pending: 0 });
       }
       if (call.path.startsWith('/api/integrations/google/deliveries'))

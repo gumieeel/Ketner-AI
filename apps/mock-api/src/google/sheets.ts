@@ -35,10 +35,33 @@ export class GoogleSheetsError extends Error {
   }
 }
 
-/** Тело запроса `spreadsheets.create`: лист «Заявки», строка заголовков, первая строка закреплена. */
-export function leadSpreadsheetBody(): Record<string, unknown> {
+/** Ширина колонок в пикселях, по порядку `LEAD_SHEET_COLUMNS`: вопрос — самый широкий. */
+export const LEAD_SHEET_WIDTHS = [140, 150, 150, 180, 380, 240, 290] as const;
+
+/** Часовой пояс в формате IANA (`Asia/Qyzylorda`), который знает Intl; иначе — нет. */
+export function validTimeZone(value: unknown): string | null {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_+\-/]{1,64}$/.test(value)) return null;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+/** Заголовки: «Дата» — в часовом поясе владельца, если он известен, иначе «Дата (UTC)». */
+export function leadSheetHeaders(timeZone?: string | null): string[] {
+  return [validTimeZone(timeZone) ? 'Дата' : 'Дата (UTC)', ...LEAD_SHEET_COLUMNS.slice(1)];
+}
+
+/**
+ * Тело запроса `spreadsheets.create`: лист «Заявки», строка заголовков жирным, первая строка
+ * закреплена, ширина колонок; часовой пояс таблицы — пояс владельца, если он известен.
+ */
+export function leadSpreadsheetBody(timeZone?: string | null): Record<string, unknown> {
+  const zone = validTimeZone(timeZone);
   return {
-    properties: { title: LEAD_SPREADSHEET_TITLE },
+    properties: { title: LEAD_SPREADSHEET_TITLE, ...(zone ? { timeZone: zone } : {}) },
     sheets: [
       {
         properties: { title: LEAD_SHEET_TITLE, gridProperties: { frozenRowCount: 1 } },
@@ -48,11 +71,13 @@ export function leadSpreadsheetBody(): Record<string, unknown> {
             startColumn: 0,
             rowData: [
               {
-                values: LEAD_SHEET_COLUMNS.map((title) => ({
+                values: leadSheetHeaders(zone).map((title) => ({
                   userEnteredValue: { stringValue: title },
+                  userEnteredFormat: { textFormat: { bold: true } },
                 })),
               },
             ],
+            columnMetadata: LEAD_SHEET_WIDTHS.map((pixelSize) => ({ pixelSize })),
           },
         ],
       },
@@ -63,6 +88,7 @@ export function leadSpreadsheetBody(): Record<string, unknown> {
 export async function createLeadSpreadsheet(
   accessToken: string,
   fetchImpl: typeof fetch = fetch,
+  timeZone?: string | null,
 ): Promise<{ id: string; url: string }> {
   let response: Response;
   try {
@@ -73,7 +99,7 @@ export async function createLeadSpreadsheet(
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify(leadSpreadsheetBody()),
+      body: JSON.stringify(leadSpreadsheetBody(timeZone)),
       signal: AbortSignal.timeout(20_000),
     });
   } catch {
@@ -114,13 +140,33 @@ export interface LeadRowInput {
   question: string;
   dialogUrl: string;
   leadId: string;
+  /** Часовой пояс владельца (IANA); нет — дата в UTC с пометкой. */
+  timeZone?: string | null;
 }
 
-/** `2026-11-21 17:05 UTC`: часовой пояс владельца неизвестен, поэтому явно UTC. */
-export function formatLeadDate(iso: string): string {
+/**
+ * Дата заявки: `2026-11-22 11:35` в поясе владельца, если он известен; иначе `2026-11-22 06:35 UTC`
+ * (и колонка таблицы тогда называется «Дата (UTC)»).
+ */
+export function formatLeadDate(iso: string, timeZone?: string | null): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+  const zone = validTimeZone(timeZone);
+  if (!zone) return `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: zone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(date)
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
 function cell(value: string): string {
@@ -145,7 +191,7 @@ export function neutralizeFormula(value: string): string {
  */
 export function leadRow(input: LeadRowInput): string[] {
   return [
-    formatLeadDate(input.createdAt),
+    formatLeadDate(input.createdAt, input.timeZone),
     input.botName,
     neutralizeFormula(input.name),
     neutralizeFormula(input.contact),

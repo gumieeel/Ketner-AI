@@ -76,6 +76,8 @@ export interface SheetsDeliveryDeps {
   enabled: (userId?: string) => boolean;
   /** Адрес сайта для ссылки «Диалог». */
   siteUrl: () => string;
+  /** Часовой пояс владельца (дата в таблице); нет — UTC с пометкой. */
+  timeZoneOf?: (userId: string) => string | null;
   /** Письмо и Telegram владельцу: доступ отозван или таблица пропала (один раз за поломку). */
   notifyBroken?: (userId: string, status: 'reconnect_required' | 'sheet_missing') => Promise<void>;
   fetchImpl?: typeof fetch;
@@ -277,6 +279,7 @@ export class SheetsDelivery {
         question: lead.question,
         dialogUrl: `${this.deps.siteUrl()}/solutions/${encodeURIComponent(lead.solutionId)}`,
         leadId: lead.id,
+        timeZone: this.deps.timeZoneOf?.(effect.userId) ?? null,
       });
 
       const dispatched = await journal.dispatch(effect);
@@ -518,7 +521,11 @@ export class SheetsDelivery {
     } catch (error) {
       throw new GoogleSheetsError(error instanceof AccessError ? error.code : 'unavailable');
     }
-    const spreadsheet = await createLeadSpreadsheet(token, this.fetchImpl);
+    const spreadsheet = await createLeadSpreadsheet(
+      token,
+      this.fetchImpl,
+      this.deps.timeZoneOf?.(userId) ?? null,
+    );
     const updated = await this.deps.connections.update(
       userId,
       { status: 'connected', lastErrorCode: null, spreadsheet },
