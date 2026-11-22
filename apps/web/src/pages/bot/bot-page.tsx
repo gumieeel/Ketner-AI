@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { buttonClasses } from '@/components/ui/button-classes';
 import { Spinner } from '@/components/ui/spinner';
 import {
   BotApiError,
@@ -26,6 +27,11 @@ import { translate, useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 
 const MESSAGE_MAX = 1000;
+/** Места, где раскрывается форма заявки, кроме сообщений бота (там — id сообщения). */
+const END = 'end';
+const PAUSED = 'paused';
+/** Отступ от края области переписки при показе раскрытой формы, px. */
+const EDGE = 12;
 
 /**
  * Страница бота для клиентов: ketner.org/b/<адрес> (docs/AUTOMATION_PLAN.md, этап B).
@@ -57,13 +63,19 @@ function BotChat({ slug, embed }: { slug: string; embed: boolean }) {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<TranslationKey | null>(null);
-  const [contactOpen, setContactOpen] = useState(false);
-  // Вопрос для формы заявки — сообщение посетителя, после которого форму предложили. `seq` растёт
-  // с каждым новым предложением: открытая форма подставляет новый вопрос, а не первый.
-  const [offer, setOffer] = useState({ seq: 0, question: '' });
-  const [leadSent, setLeadSent] = useState(false);
+  // Форма заявки свёрнута, пока посетитель сам её не раскроет. `at` — где она раскрыта: под ответом
+  // бота с предложением (id сообщения), под отметкой «бот не отвечает» или в конце переписки
+  // (постоянная кнопка в шапке). `question` — сообщение посетителя, к которому относится заявка.
+  const [form, setForm] = useState<{ at: string; question: string } | null>(null);
+  // Имя и контакт сохраняются, если форму свернули и раскрыли снова.
+  const [lead, setLead] = useState({ name: '', contact: '' });
+  // Где показать «Заявка отправлена»; после заявки бот больше не предлагает форму в сообщениях.
+  const [sentAt, setSentAt] = useState<string | null>(null);
+  const [leadLeft, setLeadLeft] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const toggles = useRef(new Map<string, HTMLButtonElement>());
   const inputId = useId();
+  const baseId = useId();
 
   const language = bot?.language ?? preferred;
   const t = (key: TranslationKey, vars?: Record<string, string | number>) =>
@@ -93,13 +105,19 @@ function BotChat({ slug, embed }: { slug: string; embed: boolean }) {
     void load();
   }, [load]);
 
+  // К концу переписки — только когда появилось новое сообщение. Раскрытие и сворачивание формы
+  // переписку не двигают (раскрытая форма лишь показывается целиком, если ушла за край).
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: 'end' });
-  }, [messages, contactOpen, leadSent]);
+  }, [messages.length, sending]);
 
-  const offerContact = (question: string) => {
-    setOffer((current) => ({ seq: current.seq + 1, question }));
-    setContactOpen(true);
+  const openForm = (at: string, question: string) => {
+    setForm({ at, question });
+    if (sentAt === at) setSentAt(null);
+  };
+  const toggleForm = (at: string, question: string) => {
+    if (form?.at === at) setForm(null);
+    else openForm(at, question);
   };
 
   const send = async (text: string) => {
@@ -126,13 +144,11 @@ function BotChat({ slug, embed }: { slug: string; embed: boolean }) {
         ...current.map((item) => (item.id === temporary.id ? { ...item, pending: false } : item)),
         result.message,
       ]);
-      if (result.message.offerContact) offerContact(content);
     } catch (caught) {
       setMessages((current) => current.filter((item) => item.id !== temporary.id));
       setDraft(content);
       if (caught instanceof BotApiError && caught.code === 'bot_paused') {
         setBot({ ...bot, status: 'paused' });
-        offerContact(content);
       } else {
         setError(
           caught instanceof BotApiError && caught.status === 0
@@ -161,9 +177,9 @@ function BotChat({ slug, embed }: { slug: string; embed: boolean }) {
     conversationStore.clear(slug);
     setConversationId(null);
     setMessages([]);
-    setContactOpen(false);
-    setOffer((current) => ({ seq: current.seq + 1, question: '' }));
-    setLeadSent(false);
+    setForm(null);
+    setSentAt(null);
+    setLeadLeft(false);
     setError(null);
   };
 
@@ -199,24 +215,94 @@ function BotChat({ slug, embed }: { slug: string; embed: boolean }) {
   const paused = bot.status === 'paused';
   const asked = messages.some((item) => item.role === 'user');
   const lastUser = [...messages].reverse().find((item) => item.role === 'user')?.content ?? '';
+  /** Вопрос посетителя, на который отвечает сообщение бота с номером `index`. */
+  const questionBefore = (index: number) => {
+    for (let i = index - 1; i >= 0; i -= 1) {
+      if (messages[i]!.role === 'user') return messages[i]!.content;
+    }
+    return '';
+  };
+  const formId = (at: string) => `${baseId}-form-${at}`;
+  const collapse = (at: string) => {
+    setForm(null);
+    // Фокус — на кнопку, которая раскрыла форму, без прокрутки: переписка остаётся на месте.
+    requestAnimationFrame(() => toggles.current.get(at)?.focus({ preventScroll: true }));
+  };
+  const toggleRef = (at: string) => (node: HTMLButtonElement | null) => {
+    if (node) toggles.current.set(at, node);
+    else toggles.current.delete(at);
+  };
+  /** Раскрытая форма или «заявка отправлена» на месте `at`. */
+  const contactPanel = (at: string) =>
+    form?.at === at ? (
+      <ContactForm
+        id={formId(at)}
+        t={t}
+        question={form.question}
+        lead={lead}
+        onLead={setLead}
+        onCollapse={() => collapse(at)}
+        onSend={async (sent) => {
+          await sendLead(slug, sent, conversationId);
+          setForm(null);
+          setSentAt(at);
+          setLeadLeft(true);
+        }}
+      />
+    ) : sentAt === at ? (
+      <p
+        role="status"
+        className="mt-2 w-full rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-[14px] leading-6 text-text"
+      >
+        {t('botPage.contact.sent')}
+      </p>
+    ) : null;
+  /** Маленькая кнопка «Оставить заявку» под сообщением: раскрывает и сворачивает форму на месте. */
+  const inlineOffer = (at: string, question: string) => (
+    <>
+      <button
+        ref={toggleRef(at)}
+        type="button"
+        aria-expanded={form?.at === at}
+        aria-controls={form?.at === at ? formId(at) : undefined}
+        onClick={() => toggleForm(at, question)}
+        className="mt-2 inline-flex min-h-9 items-center rounded-full border border-accent/35 bg-surface px-3.5 text-[14px] font-medium text-accent hover:bg-accent-soft focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:outline-none"
+      >
+        {t('botPage.contactButton')}
+      </button>
+      {contactPanel(at)}
+    </>
+  );
 
   return (
     <Shell embed={embed}>
-      <header className="flex items-center justify-between gap-3 border-b border-stroke px-4 py-3">
+      <header className="flex items-center justify-between gap-3 border-b max-sm:gap-2 border-stroke px-4 py-3">
         <div className="min-w-0">
-          <h1 className="truncate text-[17px] font-medium text-text">{bot.name}</h1>
-          <p className="text-[12px] text-subtle">{t('botPage.aiNote')}</p>
+          <h1 className="truncate text-[17px] font-medium text-text max-sm:text-[15px]">
+            {bot.name}
+          </h1>
+          {/* Одна строка: на узком экране — короткая пометка, иначе шапка вырастает в три строки. */}
+          <p className="truncate text-[12px] text-subtle">
+            <span className="sm:hidden">{t('botPage.aiNoteShort')}</span>
+            <span className="max-sm:hidden">{t('botPage.aiNote')}</span>
+          </p>
         </div>
-        {!contactOpen ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="shrink-0"
-            onClick={() => offerContact(lastUser)}
-          >
-            {t('botPage.contactButton')}
-          </Button>
-        ) : null}
+        {/* Постоянная кнопка: форма в конце переписки, всегда доступна (и после заявки). */}
+        <button
+          ref={toggleRef(END)}
+          type="button"
+          // На узком экране кнопка компактнее: имя бота не обрезается.
+          className={buttonClasses({
+            variant: 'outline',
+            size: 'sm',
+            className: 'shrink-0 max-sm:h-9 max-sm:min-h-9 max-sm:px-2.5 max-sm:text-[13px]',
+          })}
+          aria-expanded={form?.at === END}
+          aria-controls={form?.at === END ? formId(END) : undefined}
+          onClick={() => toggleForm(END, lastUser)}
+        >
+          {t('botPage.contactButton')}
+        </button>
       </header>
 
       {/*
@@ -228,9 +314,12 @@ function BotChat({ slug, embed }: { slug: string; embed: boolean }) {
       <main className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-3 px-4 py-5">
           {paused ? (
-            <p className="rounded-xl border border-warning/25 bg-warning-soft px-4 py-3 text-[14px] leading-6 text-text">
-              {t('botPage.paused')}
-            </p>
+            <div className="flex flex-col items-start">
+              <p className="w-full rounded-xl border border-warning/25 bg-warning-soft px-4 py-3 text-[14px] leading-6 text-text">
+                {t('botPage.paused')}
+              </p>
+              {inlineOffer(PAUSED, lastUser)}
+            </div>
           ) : null}
           <ol className="flex flex-col gap-3" aria-live="polite" aria-label={bot.name}>
             {bot.greeting ? (
@@ -238,13 +327,18 @@ function BotChat({ slug, embed }: { slug: string; embed: boolean }) {
                 {bot.greeting}
               </Bubble>
             ) : null}
-            {messages.map((item) => (
+            {messages.map((item, index) => (
               <Bubble
                 key={item.id}
                 role={item.role}
                 label={item.role === 'user' ? t('botPage.you') : bot.name}
                 faded={item.pending}
                 error={item.status === 'error'}
+                after={
+                  item.role === 'assistant' && item.offerContact && !leadLeft
+                    ? inlineOffer(item.id, questionBefore(index))
+                    : contactPanel(item.id)
+                }
               >
                 {item.content}
               </Bubble>
@@ -255,30 +349,10 @@ function BotChat({ slug, embed }: { slug: string; embed: boolean }) {
               </li>
             ) : null}
           </ol>
-
-          {contactOpen ? (
-            leadSent ? (
-              <p
-                role="status"
-                className="rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-[14px] leading-6 text-text"
-              >
-                {t('botPage.contact.sent')}
-              </p>
-            ) : (
-              <ContactForm
-                t={t}
-                question={offer.question}
-                offerSeq={offer.seq}
-                onCancel={paused ? null : () => setContactOpen(false)}
-                onSend={async (lead) => {
-                  await sendLead(slug, lead, conversationId);
-                  setLeadSent(true);
-                }}
-              />
-            )
-          ) : null}
-          <div ref={endRef} />
+          {contactPanel(END)}
         </div>
+        {/* После нижнего отступа: «к концу переписки» — это настоящий конец прокрутки. */}
+        <div ref={endRef} />
       </main>
 
       <footer className="border-t border-stroke bg-canvas">
@@ -362,16 +436,19 @@ function Bubble({
   label,
   faded = false,
   error = false,
+  after,
   children,
 }: {
   role: 'user' | 'assistant';
   label: string;
   faded?: boolean;
   error?: boolean;
+  /** Под сообщением: кнопка «Оставить заявку» и форма, раскрытая на месте. */
+  after?: ReactNode;
   children: string;
 }) {
   return (
-    <li className={cn('flex', role === 'user' ? 'justify-end' : 'justify-start')}>
+    <li className={cn('flex flex-col', role === 'user' ? 'items-end' : 'items-start')}>
       <p
         className={cn(
           'max-w-[85%] rounded-2xl px-4 py-2.5 text-[15px] leading-6 break-words whitespace-pre-wrap',
@@ -385,48 +462,72 @@ function Bubble({
         <span className="sr-only">{label}: </span>
         {children}
       </p>
+      {after}
     </li>
   );
 }
 
 function ContactForm({
+  id,
   t,
   question,
-  offerSeq,
-  onCancel,
+  lead,
+  onLead,
+  onCollapse,
   onSend,
 }: {
+  id: string;
   t: (key: TranslationKey) => string;
+  /** Вопрос посетителя, к которому относится заявка (можно поправить). */
   question: string;
-  /** Номер предложения формы: новое предложение подставляет свой вопрос, имя и контакт остаются. */
-  offerSeq: number;
-  onCancel: (() => void) | null;
+  /** Имя и контакт живут у страницы: свернули и раскрыли форму — они на месте. */
+  lead: { name: string; contact: string };
+  onLead: (lead: { name: string; contact: string }) => void;
+  onCollapse: () => void;
   onSend: (lead: { name: string; contact: string; question: string }) => Promise<void>;
 }) {
-  const id = useId();
-  const [name, setName] = useState('');
-  const [contact, setContact] = useState('');
+  const ref = useRef<HTMLFormElement | null>(null);
+  const firstRef = useRef<HTMLInputElement | null>(null);
   const [text, setText] = useState(question);
-  const [shownSeq, setShownSeq] = useState(offerSeq);
-  if (shownSeq !== offerSeq) {
-    setShownSeq(offerSeq);
-    setText(question);
-  }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<TranslationKey | null>(null);
+  // Раскрытая форма показывается без перескока к концу переписки: переписка прокручивается ровно
+  // настолько, насколько форма ушла за нижний край, но не дальше, чем кнопка «Оставить заявку»
+  // над ней (на узком экране форма выше окна — сообщение бота и кнопка остаются видны). Фокус —
+  // в первое поле, без второй прокрутки.
+  useEffect(() => {
+    const form = ref.current;
+    const scroller = form?.closest('main');
+    if (form && scroller) {
+      const view = scroller.getBoundingClientRect();
+      const box = form.getBoundingClientRect();
+      const toggle = form.previousElementSibling;
+      const top =
+        toggle instanceof HTMLButtonElement ? toggle.getBoundingClientRect().top : box.top;
+      const overflow = box.bottom + EDGE - view.bottom;
+      const room = top - view.top - EDGE;
+      if (overflow > 0 && room > 0) scroller.scrollTop += Math.min(overflow, room);
+    }
+    firstRef.current?.focus({ preventScroll: true });
+  }, []);
+  const { name, contact } = lead;
   const field =
     'h-11 w-full rounded-xl border border-stroke bg-canvas px-4 text-[16px] text-text placeholder:text-subtle focus:border-stroke-strong focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40';
   return (
     <form
+      ref={ref}
+      id={id}
       aria-labelledby={`${id}-title`}
-      className="flex flex-col gap-3 rounded-2xl border border-stroke-strong bg-surface px-4 py-4"
+      // Форма лежит в переписке (aria-live): раскрытие не зачитывается целиком — фокус уже в поле.
+      aria-live="off"
+      className="mt-2 flex w-full flex-col gap-3 rounded-2xl border border-stroke-strong bg-surface px-4 py-4"
       onSubmit={(event) => {
         event.preventDefault();
         if (!name.trim() || contact.trim().length < 3) return;
         setBusy(true);
         setError(null);
-        onSend({ name: name.trim(), contact: contact.trim(), question: text.trim() })
-          .catch((caught: unknown) => {
+        onSend({ name: name.trim(), contact: contact.trim(), question: text.trim() }).catch(
+          (caught: unknown) => {
             setError(
               caught instanceof BotApiError && caught.status === 0
                 ? 'botPage.error.network'
@@ -434,8 +535,9 @@ function ContactForm({
                   ? 'botPage.error.tooMany'
                   : 'botPage.error.generic',
             );
-          })
-          .finally(() => setBusy(false));
+            setBusy(false);
+          },
+        );
       }}
     >
       <h2 id={`${id}-title`} className="text-[16px] font-medium text-text">
@@ -444,11 +546,12 @@ function ContactForm({
       <label className="flex flex-col gap-1">
         <span className="text-[13px] text-muted">{t('botPage.contact.name')}</span>
         <input
+          ref={firstRef}
           required
           autoComplete="name"
           maxLength={80}
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(event) => onLead({ name: event.target.value, contact })}
           className={field}
         />
       </label>
@@ -460,7 +563,7 @@ function ContactForm({
           maxLength={120}
           autoComplete="tel"
           value={contact}
-          onChange={(event) => setContact(event.target.value)}
+          onChange={(event) => onLead({ name, contact: event.target.value })}
           className={field}
         />
       </label>
@@ -488,11 +591,9 @@ function ContactForm({
         >
           {t('botPage.contact.send')}
         </Button>
-        {onCancel ? (
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-            {t('botPage.contact.cancel')}
-          </Button>
-        ) : null}
+        <Button type="button" variant="ghost" size="sm" onClick={onCollapse}>
+          {t('botPage.contact.collapse')}
+        </Button>
       </div>
     </form>
   );
