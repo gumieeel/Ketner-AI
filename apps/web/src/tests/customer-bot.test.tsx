@@ -32,6 +32,17 @@ function stubFetch(handler: (call: Call) => Response) {
   return calls;
 }
 
+/** Кнопка «Оставить заявку» под ответом бота с этим текстом. */
+function offerButton(reply: string) {
+  const item = screen.getByText(reply).closest('li')!;
+  return within(item).getByRole('button', { name: 'Оставить заявку' });
+}
+
+/** Постоянная кнопка «Оставить заявку» в шапке чата. */
+function headerButton() {
+  return within(screen.getByRole('banner')).getByRole('button', { name: 'Оставить заявку' });
+}
+
 const BOT = {
   slug: 'lisa-shop',
   name: 'Лиса',
@@ -96,6 +107,9 @@ describe('страница бота для клиентов /b/:slug', () => {
     const second = calls.filter((call) => call.path === '/api/b/lisa-shop/messages')[1]!;
     expect(second.body?.conversationId).toBe('conv-1');
 
+    // Форма свёрнута: под ответом — кнопка «Оставить заявку», форма раскрывается по нажатию.
+    expect(screen.queryByRole('form')).toBeNull();
+    fireEvent.click(offerButton('Уточнит сотрудник.'));
     const form = await screen.findByRole('form', { name: 'Оставьте контакт — вам ответят' });
     expect(within(form).getByLabelText('Вопрос')).toHaveValue('А в Астану?');
     fireEvent.change(within(form).getByLabelText('Имя'), { target: { value: 'Анна' } });
@@ -414,7 +428,11 @@ describe('страница бота: форма заявки и прокрутк
     resetAuth();
     window.localStorage.clear();
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    // jsdom не умеет scrollIntoView; тест подставляет шпиона — убираем, чтобы не мешал другим.
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  });
 
   /** Ответ бота по номеру; `offers` — номера ответов, после которых бот предлагает оставить контакт. */
   function botReplies(offers: number[]) {
@@ -446,50 +464,135 @@ describe('страница бота: форма заявки и прокрутк
     expect(await screen.findByText(reply)).toBeVisible();
   }
 
-  it('в форме — вопрос, после которого её предложили, а не первый; имя и контакт сохраняются', async () => {
-    const calls = botReplies([1, 2]);
+  it('форма свёрнута; кнопка под ответом раскрывает её на месте и сворачивает без прокрутки', async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    botReplies([1, 2]);
     renderRoute('/b/lisa-shop');
     await screen.findByRole('heading', { level: 1, name: 'Лиса' });
 
     await ask('Возите в Астану?', 'Ответ 1.');
+    expect(screen.queryByRole('form')).toBeNull();
+    const inline = offerButton('Ответ 1.');
+    expect(inline).toHaveAttribute('aria-expanded', 'false');
+
+    scroll.mockClear();
+    fireEvent.click(inline);
     const form = await screen.findByRole('form', { name: 'Оставьте контакт — вам ответят' });
+    // На месте: внутри того же сообщения, а не поверх чата и не в конце переписки.
+    expect(screen.getByText('Ответ 1.').closest('li')!.contains(form)).toBe(true);
+    expect(inline).toHaveAttribute('aria-expanded', 'true');
+    expect(inline).toHaveAttribute('aria-controls', form.id);
+    // Раскрытие не перескакивает к концу переписки (прокрутка к концу — только на новые сообщения;
+    // сдвиг на высоту формы проверен в браузере, см. PR).
+    expect(scroll).not.toHaveBeenCalled();
+    expect(within(form).getByLabelText('Имя')).toHaveFocus();
     expect(within(form).getByLabelText('Вопрос')).toHaveValue('Возите в Астану?');
     fireEvent.change(within(form).getByLabelText('Имя'), { target: { value: 'Айгерим' } });
 
-    // Форма открыта, посетитель спрашивает дальше; бот снова предлагает контакт — вопрос новый.
+    scroll.mockClear();
+    fireEvent.click(within(form).getByRole('button', { name: 'Свернуть' }));
+    expect(screen.queryByRole('form')).toBeNull();
+    expect(inline).toHaveAttribute('aria-expanded', 'false');
+    expect(scroll).not.toHaveBeenCalled();
+    await waitFor(() => expect(inline).toHaveFocus());
+
+    // Снова раскрыли — имя на месте. Новый ответ с предложением не двигает открытую форму.
+    fireEvent.click(inline);
+    expect(within(await screen.findByRole('form')).getByLabelText('Имя')).toHaveValue('Айгерим');
     await ask('Можно оплатить картой?', 'Ответ 2.');
-    expect(within(form).getByLabelText('Вопрос')).toHaveValue('Можно оплатить картой?');
-    expect(within(form).getByLabelText('Имя')).toHaveValue('Айгерим');
+    expect(screen.getByText('Ответ 1.').closest('li')!.contains(screen.getByRole('form'))).toBe(
+      true,
+    );
+    // Кнопка под вторым ответом раскрывает форму уже там, со своим вопросом.
+    fireEvent.click(offerButton('Ответ 2.'));
+    const second = screen.getByRole('form');
+    expect(screen.getByText('Ответ 2.').closest('li')!.contains(second)).toBe(true);
+    expect(within(second).getByLabelText('Вопрос')).toHaveValue('Можно оплатить картой?');
+    expect(within(second).getByLabelText('Имя')).toHaveValue('Айгерим');
+    expect(offerButton('Ответ 1.')).toHaveAttribute('aria-expanded', 'false');
+  });
 
-    // Ответ без предложения контакта не меняет вопрос текущего предложения.
-    await ask('Спасибо', 'Ответ 3.');
-    expect(within(form).getByLabelText('Вопрос')).toHaveValue('Можно оплатить картой?');
+  it('кнопка в шапке есть всегда: форма в конце переписки с последним вопросом; повторное нажатие сворачивает', async () => {
+    botReplies([]);
+    renderRoute('/b/lisa-shop');
+    await screen.findByRole('heading', { level: 1, name: 'Лиса' });
+    expect(headerButton()).toHaveAttribute('aria-expanded', 'false');
 
+    await ask('Есть доставка?', 'Ответ 1.');
+    // Бот не предлагал форму — под ответом кнопки нет.
+    expect(within(screen.getByText('Ответ 1.').closest('li')!).queryByRole('button')).toBeNull();
+    fireEvent.click(headerButton());
+    const form = await screen.findByRole('form', { name: 'Оставьте контакт — вам ответят' });
+    expect(form.closest('li')).toBeNull();
+    expect(within(form).getByLabelText('Вопрос')).toHaveValue('Есть доставка?');
+    expect(headerButton()).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(headerButton());
+    expect(screen.queryByRole('form')).toBeNull();
+    await ask('Сколько стоит?', 'Ответ 2.');
+    fireEvent.click(headerButton());
+    expect(within(await screen.findByRole('form')).getByLabelText('Вопрос')).toHaveValue(
+      'Сколько стоит?',
+    );
+  });
+
+  it('после заявки: «отправлено» на месте формы, кнопок под ответами нет, кнопка в шапке работает', async () => {
+    const calls = botReplies([1, 2]);
+    renderRoute('/b/lisa-shop');
+    await screen.findByRole('heading', { level: 1, name: 'Лиса' });
+    await ask('Нужен букет на завтра', 'Ответ 1.');
+    fireEvent.click(offerButton('Ответ 1.'));
+    const form = await screen.findByRole('form');
+    fireEvent.change(within(form).getByLabelText('Имя'), { target: { value: 'Анна' } });
     fireEvent.change(within(form).getByLabelText('Телефон, мессенджер или почта'), {
       target: { value: '+7 700 000 00 00' },
     });
     fireEvent.click(within(form).getByRole('button', { name: 'Отправить заявку' }));
-    expect(await screen.findByText('Спасибо! Заявка отправлена — с вами свяжутся.')).toBeVisible();
+    const sent = await screen.findByText('Спасибо! Заявка отправлена — с вами свяжутся.');
+    expect(screen.getByText('Ответ 1.').closest('li')!.contains(sent)).toBe(true);
     expect(calls.find((call) => call.path === '/api/b/lisa-shop/leads')?.body).toMatchObject({
-      name: 'Айгерим',
-      question: 'Можно оплатить картой?',
+      name: 'Анна',
+      question: 'Нужен букет на завтра',
     });
+
+    await ask('А ещё один?', 'Ответ 2.');
+    for (const reply of ['Ответ 1.', 'Ответ 2.']) {
+      expect(
+        within(screen.getByText(reply).closest('li')!).queryByRole('button', {
+          name: 'Оставить заявку',
+        }),
+      ).toBeNull();
+    }
+    fireEvent.click(headerButton());
+    expect(within(await screen.findByRole('form')).getByLabelText('Имя')).toHaveValue('Анна');
   });
 
-  it('кнопка «Оставить контакт» подставляет последний вопрос; после отмены — следующий', async () => {
-    botReplies([]);
-    renderRoute('/b/lisa-shop');
+  it('виджет (embed=1) — то же: форма свёрнута, раскрывается под ответом', async () => {
+    botReplies([1]);
+    renderRoute('/b/lisa-shop?embed=1');
     await screen.findByRole('heading', { level: 1, name: 'Лиса' });
-    await ask('Есть доставка?', 'Ответ 1.');
-    fireEvent.click(screen.getByRole('button', { name: 'Оставить контакт' }));
-    let form = await screen.findByRole('form', { name: 'Оставьте контакт — вам ответят' });
-    expect(within(form).getByLabelText('Вопрос')).toHaveValue('Есть доставка?');
-    fireEvent.click(within(form).getByRole('button', { name: 'Отмена' }));
+    expect(document.querySelector('[data-embed]')).not.toBeNull();
+    await ask('Возите в Астану?', 'Ответ 1.');
+    expect(screen.queryByRole('form')).toBeNull();
+    expect(headerButton()).toBeVisible();
+    fireEvent.click(offerButton('Ответ 1.'));
+    const form = await screen.findByRole('form');
+    expect(screen.getByText('Ответ 1.').closest('li')!.contains(form)).toBe(true);
+  });
 
-    await ask('Сколько стоит?', 'Ответ 2.');
-    fireEvent.click(screen.getByRole('button', { name: 'Оставить контакт' }));
-    form = await screen.findByRole('form', { name: 'Оставьте контакт — вам ответят' });
-    expect(within(form).getByLabelText('Вопрос')).toHaveValue('Сколько стоит?');
+  it('бот на паузе: форма тоже свёрнута, кнопка под отметкой «не отвечает»', async () => {
+    stubFetch((call) =>
+      call.path === '/api/b/lisa-shop'
+        ? json(200, { bot: { ...BOT, status: 'paused' } })
+        : json(404, { error: { code: 'not_found' } }),
+    );
+    renderRoute('/b/lisa-shop');
+    const note = await screen.findByText('Бот сейчас не отвечает. Оставьте контакт — вам ответят.');
+    expect(screen.queryByRole('form')).toBeNull();
+    const box = note.parentElement!;
+    fireEvent.click(within(box).getByRole('button', { name: 'Оставить заявку' }));
+    expect(box.contains(await screen.findByRole('form'))).toBe(true);
   });
 
   it('прокрутка: подписи сообщений для экранных чтецов внутри позиционированной области переписки', async () => {
@@ -501,6 +604,7 @@ describe('страница бота: форма заявки и прокрутк
     renderRoute('/b/lisa-shop?embed=1');
     await screen.findByRole('heading', { level: 1, name: 'Лиса' });
     await ask('Возите в Астану?', 'Ответ 1.');
+    fireEvent.click(offerButton('Ответ 1.'));
     await screen.findByRole('form', { name: 'Оставьте контакт — вам ответят' });
 
     const main = document.querySelector('main')!;
