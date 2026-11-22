@@ -70,6 +70,24 @@ export function googleOAuthSettings(): GoogleOAuthSettings | null {
   return { clientId, clientSecret, redirectUri };
 }
 
+/**
+ * Google Picker для кнопки «Выбрать прежнюю таблицу»: ключ API для браузера (в Google Cloud он
+ * ограничен адресом сайта и Picker API) и номер проекта (`appId`) — без номера `drive.file` не даст
+ * Ketner доступ к выбранному файлу. Не заданы — кнопки нет, остаётся ссылка на прежнюю таблицу.
+ */
+export interface GooglePickerConfig {
+  apiKey: string;
+  appId: string;
+}
+
+export function googlePickerConfig(): GooglePickerConfig | null {
+  const apiKey = process.env.GOOGLE_SHEETS_PICKER_API_KEY?.trim();
+  const appId = process.env.GOOGLE_SHEETS_APP_ID?.trim();
+  if (!apiKey || !/^[A-Za-z0-9_-]{20,100}$/.test(apiKey)) return null;
+  if (!appId || !/^[0-9]{6,20}$/.test(appId)) return null;
+  return { apiKey, appId };
+}
+
 // --- state ----------------------------------------------------------------------------------
 
 interface StatePayload {

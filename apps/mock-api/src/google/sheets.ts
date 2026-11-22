@@ -319,3 +319,83 @@ export async function spreadsheetTrashed(
   const body = (await response.json().catch(() => ({}))) as { trashed?: unknown };
   return body.trashed === true;
 }
+
+// --- Прежняя таблица после переподключения (docs/STAGE_F_SHEETS.md, раздел 4.1) -------------
+
+const SPREADSHEET_MIME = 'application/vnd.google-apps.spreadsheet';
+/** Строка заголовков листа «Заявки». */
+export const LEAD_HEADER_RANGE = `${LEAD_SHEET_TITLE}!A1:G1`;
+
+/** id таблицы Google: латиница, цифры, `_` и `-`. */
+export function validSpreadsheetId(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{10,200}$/.test(value);
+}
+
+export function spreadsheetUrlOf(spreadsheetId: string): string {
+  return `https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/edit`;
+}
+
+/** Строка заголовков таблицы Ketner: «Дата» или «Дата (UTC)», дальше — колонки по порядку. */
+export function isLeadHeader(row: unknown): boolean {
+  if (!Array.isArray(row) || row.length < LEAD_SHEET_COLUMNS.length) return false;
+  const cells = row.map((cell) => (typeof cell === 'string' ? cell.trim() : ''));
+  if (cells[0] !== 'Дата' && cells[0] !== 'Дата (UTC)') return false;
+  return LEAD_SHEET_COLUMNS.slice(1).every((title, index) => cells[index + 1] === title);
+}
+
+/**
+ * Можно ли писать в таблицу этим доступом:
+ * - `ok` — файл виден Ketner, это Google Таблица не в корзине (и, если проверяется заголовок, —
+ *   с листом «Заявки» и колонками Ketner);
+ * - `no_access` — Google не показывает файл (404 / 403): удалён навсегда или `drive.file` его не
+ *   покрывает — так после отзыва доступа и переподключения;
+ * - `trashed`, `not_spreadsheet`, `wrong_header` — по названию.
+ *
+ * Сбой Google (сеть, 5xx, 429) и отозванный доступ (401) — `GoogleSheetsError`.
+ */
+export type LeadSheetCheck = 'ok' | 'no_access' | 'trashed' | 'not_spreadsheet' | 'wrong_header';
+
+export async function checkLeadSpreadsheet(
+  accessToken: string,
+  spreadsheetId: string,
+  fetchImpl: typeof fetch = fetch,
+  { header = true }: { header?: boolean } = {},
+): Promise<LeadSheetCheck> {
+  let response: Response;
+  try {
+    response = await fetchImpl(
+      `${DRIVE_FILES_URL}/${encodeURIComponent(spreadsheetId)}?fields=mimeType,trashed`,
+      { headers: sheetHeaders(accessToken), signal: AbortSignal.timeout(15_000) },
+    );
+  } catch {
+    throw new GoogleSheetsError('unavailable');
+  }
+  if (response.status === 404 || response.status === 403) return 'no_access';
+  if (!response.ok) throw new GoogleSheetsError(googleErrorCode(response.status));
+  const file = (await response.json().catch(() => ({}))) as {
+    mimeType?: unknown;
+    trashed?: unknown;
+  };
+  if (file.mimeType !== undefined && file.mimeType !== SPREADSHEET_MIME) return 'not_spreadsheet';
+  if (file.trashed === true) return 'trashed';
+  if (!header) return 'ok';
+
+  const url = new URL(
+    `${SHEETS_URL}/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(LEAD_HEADER_RANGE)}`,
+  );
+  try {
+    response = await fetchImpl(url.toString(), {
+      headers: sheetHeaders(accessToken),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    throw new GoogleSheetsError('unavailable');
+  }
+  if (response.status === 404 || response.status === 403) return 'no_access';
+  // 400 — диапазона нет: в таблице нет листа «Заявки».
+  if (response.status === 400) return 'wrong_header';
+  if (!response.ok) throw new GoogleSheetsError(googleErrorCode(response.status));
+  const body = (await response.json().catch(() => ({}))) as { values?: unknown };
+  const rows = Array.isArray(body.values) ? body.values : [];
+  return isLeadHeader(rows[0]) ? 'ok' : 'wrong_header';
+}

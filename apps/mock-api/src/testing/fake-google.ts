@@ -52,6 +52,16 @@ export interface FakeGoogle {
   readStatus: number;
   trashed: boolean;
   driveStatus: number;
+  /**
+   * Файлы, которые Google не показывает Ketner (404 в Drive и Sheets): так после отзыва доступа
+   * `drive.file` перестаёт покрывать таблицу, созданную раньше.
+   */
+  noAccess: Set<string>;
+  /**
+   * Файлы в Диске владельца: тип, корзина и строка заголовков листа «Заявки» (`null` — листа нет).
+   * Созданные таблицы попадают сюда сами, с заголовком из запроса.
+   */
+  files: Map<string, { mimeType?: string; trashed?: boolean; header?: string[] | null }>;
   /** Следующий ответ token endpoint. */
   grant: FakeGoogleGrant;
   /** Статус ответа на создание таблицы (200 — создать). */
@@ -75,6 +85,8 @@ export function createFakeGoogle(): FakeGoogle {
     readStatus: 200,
     trashed: false,
     driveStatus: 200,
+    noAccess: new Set(),
+    files: new Map(),
     grant: {},
     sheetStatus: 200,
     revokeStatus: 200,
@@ -121,6 +133,7 @@ export function createFakeGoogle(): FakeGoogle {
         );
       if (values) {
         const spreadsheetId = decodeURIComponent(values[1]!);
+        if (fake.noAccess.has(spreadsheetId)) return new Response('{}', { status: 404 });
         const headers = new Headers(init?.headers);
         if (values[3]) {
           const body = JSON.parse(String(init?.body ?? '{}')) as { values: string[][] };
@@ -142,12 +155,25 @@ export function createFakeGoogle(): FakeGoogle {
           });
         }
         if (fake.readStatus !== 200) return new Response('{}', { status: fake.readStatus });
+        if (decodeURIComponent(values[2]!) === 'Заявки!A1:G1') {
+          const header = fake.files.get(spreadsheetId)?.header;
+          if (header === null) return new Response('{}', { status: 400 });
+          return Response.json({ values: header ? [header] : [] });
+        }
         const ids = (fake.rows.get(spreadsheetId) ?? []).map((row) => row[6] ?? '');
         return Response.json({ values: [['ID заявки', ...ids]] });
       }
       if (url.startsWith('https://www.googleapis.com/drive/v3/files/')) {
+        const fileId = decodeURIComponent(
+          url.slice('https://www.googleapis.com/drive/v3/files/'.length).split('?')[0]!,
+        );
+        if (fake.noAccess.has(fileId)) return new Response('{}', { status: 404 });
         if (fake.driveStatus !== 200) return new Response('{}', { status: fake.driveStatus });
-        return Response.json({ trashed: fake.trashed });
+        const file = fake.files.get(fileId);
+        return Response.json({
+          trashed: file?.trashed ?? fake.trashed,
+          mimeType: file?.mimeType ?? 'application/vnd.google-apps.spreadsheet',
+        });
       }
       if (url.startsWith('https://sheets.googleapis.com/v4/spreadsheets')) {
         const headers = new Headers(init?.headers);
@@ -158,6 +184,18 @@ export function createFakeGoogle(): FakeGoogle {
         if (fake.sheetStatus !== 200) return new Response('{}', { status: fake.sheetStatus });
         sheetCounter += 1;
         const id = `sheet${sheetCounter}-AbCdEfGhIjKlMn`;
+        const created = JSON.parse(String(init?.body ?? '{}')) as {
+          sheets?: Array<{
+            data?: Array<{
+              rowData?: Array<{ values?: Array<{ userEnteredValue?: { stringValue?: string } }> }>;
+            }>;
+          }>;
+        };
+        fake.files.set(id, {
+          header: (created.sheets?.[0]?.data?.[0]?.rowData?.[0]?.values ?? []).map(
+            (cell) => cell.userEnteredValue?.stringValue ?? '',
+          ),
+        });
         return Response.json({
           spreadsheetId: id,
           spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${id}/edit`,

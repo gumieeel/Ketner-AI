@@ -47,7 +47,7 @@ import { createGithubCallbackHandler } from './routes/github.js';
 import type { GithubConnectionStore } from './github/connection-store.js';
 import type { GithubOAuthSettings } from './github/oauth.js';
 import type { GoogleConnectionStore } from './google/connection-store.js';
-import type { GoogleOAuthSettings } from './google/oauth.js';
+import type { GoogleOAuthSettings, GooglePickerConfig } from './google/oauth.js';
 import type { GoogleVerifierStore } from './google/verifier-store.js';
 import type { GooglePrefsStore } from './google/prefs.js';
 import type { SheetsDelivery } from './google/delivery.js';
@@ -100,6 +100,8 @@ export interface AppDeps {
   googleFetch?: typeof fetch;
   /** Настройки OAuth Google Таблиц; в тестах подменяются. */
   googleSettings?: () => GoogleOAuthSettings | null;
+  /** Настройки Google Picker («Выбрать прежнюю таблицу»); в тестах подменяются. */
+  googlePicker?: () => GooglePickerConfig | null;
   /** Доставка заявок в Google Таблицу; в тестах — своя (обход вызывается вручную). */
   googleDelivery?: SheetsDelivery;
   /** Часовой пояс владельца для дат в Google Таблице; в тестах — в памяти. */

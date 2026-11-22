@@ -101,6 +101,13 @@ const GOOGLE_TAG_FRAMES = [
 ];
 
 /**
+ * Google Picker — кнопка «Выбрать прежнюю таблицу» на карточке Google Таблицы (этап F): загрузчик
+ * apis.google.com и окно выбора файла во фрейме docs.google.com.
+ */
+const GOOGLE_PICKER_SCRIPTS = ['https://apis.google.com'];
+const GOOGLE_PICKER_FRAMES = ['https://docs.google.com'];
+
+/**
  * Content-Security-Policy для веб-интерфейса. Главное — script-src: даже если в разметку попадёт
  * чужой код (XSS), браузер не выполнит ни inline-скрипт, ни скрипт с постороннего домена, и токен
  * из localStorage не утечёт. Мини-приложение Telegram открывается во фрейме web.telegram.org.
@@ -119,13 +126,13 @@ export function buildContentSecurityPolicy(indexHtml: string | null): string {
   for (const origin of GOOGLE_TAG_CONNECT) connect.add(origin);
   return [
     "default-src 'self'",
-    `script-src 'self' https://telegram.org ${GOOGLE_TAG_SCRIPTS.join(' ')} ${scriptHashes.join(' ')}`.trim(),
+    `script-src 'self' https://telegram.org ${[...GOOGLE_TAG_SCRIPTS, ...GOOGLE_PICKER_SCRIPTS].join(' ')} ${scriptHashes.join(' ')}`.trim(),
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
     "media-src 'self' data: blob:",
     `connect-src ${[...connect].join(' ')}`,
-    `frame-src 'self' ${GOOGLE_TAG_FRAMES.join(' ')}`,
+    `frame-src 'self' ${[...GOOGLE_TAG_FRAMES, ...GOOGLE_PICKER_FRAMES].join(' ')}`,
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",

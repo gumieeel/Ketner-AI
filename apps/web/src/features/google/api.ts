@@ -14,6 +14,20 @@ export interface GoogleSheetStatus {
   connectedAt: string | null;
   /** Сколько заявок не записано (кнопка «дописать пропущенные»). */
   pending?: number;
+  /**
+   * Прежняя таблица, которую Ketner больше не может открыть (после отзыва доступа и
+   * переподключения создана новая): ссылка на неё в Диске владельца.
+   */
+  previousSheetUrl?: string | null;
+  /** Есть ли кнопка «Выбрать прежнюю таблицу» (на сервере настроен Google Picker). */
+  picker?: boolean;
+}
+
+/** Для Google Picker: короткий access-токен, ключ API и номер проекта. */
+export interface GooglePickerAccess {
+  accessToken: string;
+  apiKey: string;
+  appId: string;
 }
 
 /** Отметка у заявки: в таблице, записывается, не записано, ждёт подключения. */
@@ -85,6 +99,13 @@ export const googleSheetsApi = {
     }),
   /** Таблицу восстановили из корзины — проверить и подключить снова. */
   recheck: () => request<GoogleSheetStatus>('/recheck', { method: 'POST', body: {} }),
+  pickerToken: () => request<GooglePickerAccess>('/picker-token', { method: 'POST', body: {} }),
+  /** Таблица, выбранная в Google Picker: сервер проверит её и будет писать заявки в неё. */
+  pickSheet: (spreadsheetId: string) =>
+    request<GoogleSheetStatus>('/pick-sheet', { method: 'POST', body: { spreadsheetId } }),
+  /** «Понятно»: убрать сообщение о прежней таблице. */
+  dismissPrevious: () =>
+    request<GoogleSheetStatus>('/previous-sheet/dismiss', { method: 'POST', body: {} }),
   backfill: () =>
     request<GoogleSheetStatus & { retried: number }>('/backfill', { method: 'POST', body: {} }),
   deliveries: async (solutionId: string) =>
