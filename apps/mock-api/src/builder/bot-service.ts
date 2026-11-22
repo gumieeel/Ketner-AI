@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { toCredits } from '../services/entitlement.js';
 import type { Language, PlanId } from '../types.js';
 import { buildBotInstructions, parseBotReply, SLUG_PATTERN } from './bot-prompt.js';
+import { applyContactNote, decideContact, type ContactState } from './contact-policy.js';
 import type { BuilderCaller, BuilderService } from './service.js';
 import type { BuilderStore } from './store.js';
 import type {
@@ -235,6 +236,10 @@ export class BotService {
       await this.deps.store.createConversation(conversation);
     }
     const history = await this.deps.store.botHistory(solution.id, conversation.id, BOT_HISTORY);
+    // Была ли уже форма заявки и оставлена ли заявка: показывать форму решает сервер
+    // (builder/contact-policy.ts), модель только говорит, что нужен человек.
+    const contactState = await this.deps.store.contactState(solution.id, conversation.id);
+    const contact = (wantsOffer: boolean) => decideContact(wantsOffer, contactState, input.content);
     const userMessage = await this.save(solution, conversation, {
       role: 'user',
       content: input.content,
@@ -271,15 +276,22 @@ export class BotService {
       !tierUnknown &&
       this.deps.balanceUsd(owner.userId, owner.plan) < BOT_REPLY_CAP_USD;
     if (overCap || lowBalance || blockedByTier) {
+      const offer = contact(true);
       const saved = await this.save(solution, conversation, {
         role: 'assistant',
-        content: text(
-          language,
-          'Сейчас я не могу ответить сам. Оставьте, пожалуйста, имя и телефон или мессенджер — вам ответят.',
-          'I cannot answer right now. Please leave your name and phone or messenger, and you will get a reply.',
-        ),
+        content: offer.note
+          ? applyContactNote(
+              text(language, 'Сейчас я не могу ответить сам.', 'I cannot answer right now.'),
+              offer.note,
+              language,
+            )
+          : text(
+              language,
+              'Сейчас я не могу ответить сам. Оставьте, пожалуйста, имя и телефон или мессенджер — вам ответят.',
+              'I cannot answer right now. Please leave your name and phone or messenger, and you will get a reply.',
+            ),
         model: null,
-        offerContact: true,
+        offerContact: offer.offerContact,
         creditsUsd: 0,
         status: 'complete',
       });
@@ -313,30 +325,43 @@ export class BotService {
         idempotencyKey: `bot_message:${userMessage.id}`,
       },
       tierFunded ? 'tier' : undefined,
+      contactState,
     );
     // На тарифе баланс не списывается; суточный потолок бота считается по стоимости ответа.
     const replyCostUsd = tierFunded ? answer.costUsd : answer.creditsUsd;
     if (answer.error || !answer.text.trim()) {
+      const offer = contact(true);
       const saved = await this.save(solution, conversation, {
         role: 'assistant',
-        content: text(
-          language,
-          'Не получилось ответить. Попробуйте ещё раз или оставьте контакт — вам ответят.',
-          'Could not answer. Try again or leave your contact and you will get a reply.',
-        ),
+        content: offer.note
+          ? applyContactNote(
+              text(
+                language,
+                'Не получилось ответить. Попробуйте ещё раз.',
+                'Could not answer. Try again.',
+              ),
+              offer.note,
+              language,
+            )
+          : text(
+              language,
+              'Не получилось ответить. Попробуйте ещё раз или оставьте контакт — вам ответят.',
+              'Could not answer. Try again or leave your contact and you will get a reply.',
+            ),
         model: answer.model,
-        offerContact: true,
+        offerContact: offer.offerContact,
         creditsUsd: replyCostUsd,
         status: 'error',
       });
       return { ok: true, conversationId: conversation.id, message: publicBotMessage(saved) };
     }
     const parsed = parseBotReply(answer.text);
+    const offer = contact(parsed.offerContact || answer.offerContact === true);
     const saved = await this.save(solution, conversation, {
       role: 'assistant',
-      content: parsed.text,
+      content: applyContactNote(parsed.text, offer.note, language),
       model: answer.model,
-      offerContact: parsed.offerContact || answer.offerContact === true,
+      offerContact: offer.offerContact,
       creditsUsd: replyCostUsd,
       status: 'complete',
     });
@@ -369,6 +394,7 @@ export class BotService {
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,
     trigger: Pick<BotAgentInput, 'triggerKind' | 'triggerRef' | 'idempotencyKey'>,
     funding?: BotAgentInput['funding'],
+    contactState?: ContactState,
   ): Promise<BotAnswer> {
     const platform = this.deps.platform;
     if (platform && solution.bot && platform.enabled(solution.id)) {
@@ -385,6 +411,7 @@ export class BotService {
           maxOutputTokens: BOT_REPLY_TOKENS,
           replyCapUsd: BOT_REPLY_CAP_USD,
           ...(funding ? { funding } : {}),
+          ...(contactState ? { contactState } : {}),
         });
       } catch (error) {
         if (!(error instanceof PlatformUnavailableError)) throw error;
@@ -395,7 +422,7 @@ export class BotService {
       caller,
       null,
       gatewayConversationId,
-      buildBotInstructions(config, solution.bot!),
+      buildBotInstructions(config, solution.bot!, contactState),
       messages,
       {
         solutionId: solution.id,

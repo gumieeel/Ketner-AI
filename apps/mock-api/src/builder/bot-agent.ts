@@ -33,6 +33,7 @@ import { ACTIONS, approvalRequirement, isActionId } from '../platform/risk.js';
 import type { Language } from '../types.js';
 import { PlatformUnavailableError } from './bot-platform-error.js';
 import { buildBotInstructions } from './bot-prompt.js';
+import type { ContactState } from './contact-policy.js';
 import type { BuilderCaller } from './service.js';
 import type { AssistantConfig, BotSettings } from './types.js';
 
@@ -64,6 +65,8 @@ export interface BotAgentInput {
   replyCapUsd: number;
   /** Источник оплаты вместо баланса: `allowance` — проба владельца (P2), `tier` — тариф (P3). */
   funding?: 'allowance' | 'tier';
+  /** Форма заявки уже была / заявка уже оставлена в этом разговоре (builder/contact-policy.ts). */
+  contactState?: ContactState;
 }
 
 export interface BotAgentDeps {
@@ -94,8 +97,8 @@ const text = (language: Language, ru: string, en: string) => (language === 'en' 
 /** Дописка к промпту бота: только на пути платформы, где у модели есть инструменты. */
 function toolInstructions(language: Language): string {
   return language === 'en'
-    ? `\nTools:\n- knowledge_search: search the owner's knowledge and corrected answers when the answer is not obvious from the data above.\n- offer_contact: when the answer is not in the data, or the customer wants to order, book, talk to a person or complains — call it instead of the ${'[[CONTACT]]'} line. Always pass reply: ONE sentence to the customer that names their topic in their words and says a staff member will help, e.g. "Delivery to Astana will be confirmed by a manager — leave your contact and you will get a reply." Never reuse the same sentence for different questions.`
-    : `\nИнструменты:\n- knowledge_search — поиск в знаниях владельца и исправленных ответах, если ответ не очевиден из данных выше.\n- offer_contact — если ответа в данных нет или клиент хочет заказать, записаться, поговорить с человеком или жалуется: вызови его вместо строки ${'[[CONTACT]]'}. Всегда передавай reply — ОДНО предложение клиенту, в котором его тема названа его словами и сказано, что поможет сотрудник, например: «Доставку в Астану уточнит менеджер — оставьте контакт, и вам ответят.» Не повторяй одну и ту же фразу для разных вопросов.`;
+    ? `\nTools:\n- knowledge_search: search the owner's knowledge and corrected answers when the answer is not obvious from the data above.\n- offer_contact: only when a person is really needed — the answer is not in the data even after knowledge_search, or the customer wants to order, book, talk to a person or complains. Call it instead of the ${'[[CONTACT]]'} line; for an unknown answer, search first. Always pass reply: ONE sentence to the customer that names their topic in their words and says a staff member will help, e.g. "Delivery to Astana will be confirmed by a manager — leave your contact and you will get a reply." Never reuse the same sentence for different questions.`
+    : `\nИнструменты:\n- knowledge_search — поиск в знаниях владельца и исправленных ответах, если ответ не очевиден из данных выше.\n- offer_contact — только когда действительно нужен человек: ответа нет в данных даже после knowledge_search, или клиент хочет заказать, записаться, поговорить с человеком или жалуется. Вызывай его вместо строки ${'[[CONTACT]]'}; если ответ неизвестен — сначала поиск. Всегда передавай reply — ОДНО предложение клиенту, в котором его тема названа его словами и сказано, что поможет сотрудник, например: «Доставку в Астану уточнит менеджер — оставьте контакт, и вам ответят.» Не повторяй одну и ту же фразу для разных вопросов.`;
 }
 
 /** Фрагменты знаний и исправленных ответов, где встречаются слова запроса. */
@@ -122,7 +125,14 @@ export function searchKnowledge(
     .slice(0, 8);
 }
 
-export function botTools(config: AssistantConfig, bot: BotSettings): LoopTool[] {
+export function botTools(
+  config: AssistantConfig,
+  bot: BotSettings,
+  /** Последний вопрос посетителя: по нему проверяется «ответа нет в данных». */
+  question = '',
+): LoopTool[] {
+  // «Ответ неизвестен» — только если поиск в знаниях владельца ничего не нашёл.
+  let searched = false;
   return [
     {
       name: 'knowledge_search',
@@ -142,6 +152,7 @@ export function botTools(config: AssistantConfig, bot: BotSettings): LoopTool[] 
           : { ok: false, error: 'query must be a non-empty string up to 300 characters' };
       },
       async execute(query) {
+        searched = true;
         const found = searchKnowledge(config, bot, query as string);
         return {
           content: found.length > 0 ? found.join('\n') : 'Nothing found in the owner knowledge.',
@@ -180,6 +191,19 @@ export function botTools(config: AssistantConfig, bot: BotSettings): LoopTool[] 
       },
       async execute(value) {
         const { reason, reply } = value as { reason: string; reply: string };
+        if (reason === 'unknown_answer' && !searched) {
+          // Модель не искала: ищем сами по вопросу посетителя. Нашлось — в этот раз форма не
+          // показывается, факты уходят модели: она отвечает по ним, а если они не про то — вызывает
+          // offer_contact ещё раз (поиск уже был, тогда форма показывается).
+          searched = true;
+          const found = searchKnowledge(config, bot, question);
+          if (found.length > 0) {
+            return {
+              content: `The owner's data may already answer this. Answer from it; only if it really does not answer the question, call offer_contact again:\n${found.join('\n')}`,
+              meta: { reason, refused: 'answer_in_data', matches: found.length },
+            };
+          }
+        }
         return {
           content: 'The contact form is shown to the customer.',
           escalate: { reason, ...(reply ? { message: reply } : {}) },
@@ -308,7 +332,8 @@ export class BotAgentRuntime {
       ...(input.funding ? { funding: input.funding } : {}),
       assistant: {
         id: input.solutionId,
-        instructions: buildBotInstructions(config, bot) + toolInstructions(language),
+        instructions:
+          buildBotInstructions(config, bot, input.contactState) + toolInstructions(language),
         maxOutputTokens: input.maxOutputTokens,
         maxChargeUsd: input.replyCapUsd,
         replaceSystemPrompt: true,
@@ -316,7 +341,11 @@ export class BotAgentRuntime {
     };
     const step = this.deps.stepFactory?.(base) ?? createGatewayStep(this.deps.gateway, base);
     const authorize = authorizeFor(spec, input.solutionId);
-    const tools = botTools(config, bot).filter((tool) => authorize(tool.action).allowed);
+    const lastQuestion =
+      [...input.messages].reverse().find((message) => message.role === 'user')?.content ?? '';
+    const tools = botTools(config, bot, lastQuestion).filter(
+      (tool) => authorize(tool.action).allowed,
+    );
     const limits: LoopLimits = {
       maxSteps: spec.limits.maxSteps,
       maxToolCalls: spec.limits.maxToolCalls,
