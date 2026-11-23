@@ -57,10 +57,12 @@ export const RECONCILE_RESOLVER = 'reconcile:sheet_id_column';
 const TOKEN_MARGIN_MS = 60_000;
 const DAY_MS = 24 * 60 * 60_000;
 /**
- * Перед записью — не в корзине ли таблица, не чаще раза в 10 минут на аккаунт: Sheets API пишет и в
- * файл из корзины, и без этой проверки заявки уходили бы в корзину до суточной проверки.
+ * Перед записью — не в корзине ли таблица, если прошлой проверке больше минуты: Sheets API пишет и в
+ * файл из корзины. Окно было 10 минут — в пилоте 23.11 две заявки после отправки таблицы в корзину
+ * ушли в неё. Не больше одного запроса к Drive на запись: проверка после сбоя записи (`rejected`)
+ * берёт то же окно, а не делает второй запрос.
  */
-const TRASH_BEFORE_WRITE_MS = 10 * 60_000;
+export const TRASH_BEFORE_WRITE_MS = 60_000;
 
 export interface LeadSource {
   getLead(ownerId: string, leadId: string): Promise<BotLead | null>;
@@ -335,8 +337,9 @@ export class SheetsDelivery {
     await this.deps.connections
       .update(effect.userId, { lastErrorCode: code }, new Date(this.now()))
       .catch(() => undefined);
-    // После сбоя — не в корзине ли таблица (Sheets API в файл из корзины пишет).
-    await this.checkTrash(connection, 0);
+    // После сбоя — не в корзине ли таблица (Sheets API в файл из корзины пишет). Проверка перед
+    // записью только что была — второго запроса к Drive нет.
+    await this.checkTrash(connection, TRASH_BEFORE_WRITE_MS);
   }
 
   /** Неясный исход: есть ли заявка в колонке «ID заявки». */
