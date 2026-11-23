@@ -164,6 +164,21 @@ describe('правовые страницы и контакты', () => {
     expect(ru).toMatch(/тариф \(или пакет кредитов — для покупок до 20 ноября 2026 г\.\)/);
   });
 
+  it('политика: уведомления в Telegram о заявках названы — что уходит и при каком условии', () => {
+    for (const [language, pattern] of [
+      ['ru', /Telegram — если вы привязали его к аккаунту: .*имя, контакт и вопрос клиента/],
+      [
+        'en',
+        /Telegram — if you linked it to your account: .*the customer’s name, contact and question/,
+      ],
+    ] as const) {
+      const items = getLegalDocument('privacy', language).sections.flatMap(
+        (section) => section.items ?? [],
+      );
+      expect(items.join(' ')).toMatch(pattern);
+    }
+  });
+
   it('политика: почтовый сервис Resend назван — кому передаём и что (адрес и текст письма)', () => {
     for (const [language, pattern] of [
       ['ru', /Почтовый сервис Resend — адрес получателя и текст письма/],

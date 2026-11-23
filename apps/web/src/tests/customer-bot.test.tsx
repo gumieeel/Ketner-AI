@@ -233,6 +233,58 @@ describe('кабинет бота: ссылка, код для сайта, за�
     vi.unstubAllGlobals();
   });
 
+  it('уведомления о заявках: письмо и Telegram переключаются сразу; Telegram не привязан — подсказка', async () => {
+    const details = botDetails();
+    let overview: BotOverview = {
+      ...botOverview(),
+      settings: { ...botOverview().settings, leadNotify: { email: true, telegram: true } },
+      leadNotify: { telegramLinked: false },
+    };
+    const calls = stubFetch((call) => {
+      const path = call.path.replace(/^\/api\/solutions/, '');
+      if (path === '/b1') return json(200, details);
+      if (path === '/b1/bot' && call.method === 'GET') return json(200, overview);
+      if (path === '/b1/bot' && call.method === 'PUT') {
+        overview = { ...overview, settings: { ...overview.settings, ...call.body } };
+        return json(200, overview);
+      }
+      if (path === '/b1/leads') return json(200, { leads: [] });
+      if (path === '/b1/conversations') return json(200, { conversations: [] });
+      return json(404, { error: { code: 'not_found', message: '' } });
+    });
+    renderRoute('/solutions/b1');
+
+    const card = await screen.findByTestId('lead-notify-card');
+    const email = within(card).getByRole('checkbox', { name: 'По почте' });
+    const telegram = within(card).getByRole('checkbox', { name: 'В Telegram — бот Ketner' });
+    expect(email).toBeChecked();
+    expect(telegram).toBeChecked();
+    expect(within(card).getByText(/Telegram не привязан к вашему аккаунту/)).toBeVisible();
+    expect(within(card).getByRole('link', { name: 'Привязать в настройках' })).toHaveAttribute(
+      'href',
+      '/settings',
+    );
+
+    fireEvent.click(email);
+    await waitFor(() => expect(email).not.toBeChecked());
+    const put = calls.filter((call) => call.method === 'PUT' && call.path.endsWith('/b1/bot'));
+    expect(put.at(-1)?.body).toEqual({ leadNotify: { email: false, telegram: true } });
+
+    // Telegram выключен — подсказки о привязке нет.
+    fireEvent.click(telegram);
+    await waitFor(() => expect(telegram).not.toBeChecked());
+    expect(within(card).queryByText(/Telegram не привязан/)).toBeNull();
+
+    // Сохранение формы настроек не трогает уведомления.
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    await waitFor(() =>
+      expect(calls.filter((call) => call.method === 'PUT').length).toBe(put.length + 2),
+    );
+    expect(calls.filter((call) => call.method === 'PUT').at(-1)?.body).not.toHaveProperty(
+      'leadNotify',
+    );
+  });
+
   it('владелец видит, где живёт бот, заявки и исправляет ответ из диалога', async () => {
     const details = botDetails();
     let overview: BotOverview = botOverview();

@@ -12,6 +12,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { leadNotifyOf } from './lead-notify.js';
 import { toCredits } from '../services/entitlement.js';
 import type { Language, PlanId } from '../types.js';
 import { buildBotInstructions, parseBotReply, SLUG_PATTERN } from './bot-prompt.js';
@@ -94,8 +95,13 @@ export interface BotServiceDeps {
    * ответ посетителю её не ждёт, сбой записи заявку не теряет.
    */
   onLeadCreated?: (lead: BotLead) => Promise<void>;
-  /** Письмо владельцу о новой заявке (ошибка письма заявку не теряет). */
-  notifyLead?: (owner: BotOwner, solution: Solution, lead: BotLead) => Promise<void>;
+  /**
+   * Шаг «заявка → менеджер» (builder/lead-notify.ts): письмо и Telegram владельцу о новой заявке
+   * по настройке бота. Сбой канала заявку не теряет.
+   */
+  notifyLead?: (owner: BotOwner, solution: Solution, lead: BotLead) => Promise<unknown>;
+  /** Привязан ли Telegram владельца (кабинет: подсказка у переключателя «в Telegram»). */
+  telegramLinked?: (userId: string) => boolean;
   /**
    * Путь платформы (этап D, builder/bot-agent.ts) за флагом BOT_PLATFORM_RUNTIME. Нет или флаг
    * выключен для решения — прежний путь (builder.answer), без каких-либо изменений.
@@ -488,7 +494,7 @@ export class BotService {
     const owner = this.deps.owner(solution.ownerId);
     if (owner && this.deps.notifyLead) {
       await this.deps.notifyLead(owner, solution, lead).catch((error: unknown) => {
-        console.error(`[bot] письмо о заявке ${lead.id} не отправлено`, error);
+        console.error(`[bot] уведомление о заявке ${lead.id} не отправлено`, error);
       });
     }
     return { ok: true, leadId: lead.id };
@@ -506,7 +512,9 @@ export class BotService {
     if (!solution?.bot) return null;
     const usage = await this.deps.store.botUsageSince(solution.id, dayStart(this.now()));
     return {
-      settings: solution.bot,
+      // Шаг «заявка → менеджер»: значения по умолчанию разрешены для ботов, созданных до шага.
+      settings: { ...solution.bot, leadNotify: leadNotifyOf(solution.bot) },
+      leadNotify: { telegramLinked: this.deps.telegramLinked?.(ownerId) ?? false },
       today: {
         replies: usage.replies,
         credits: toCredits(usage.creditsUsd),
