@@ -52,6 +52,8 @@ export interface FakeGoogle {
   readStatus: number;
   trashed: boolean;
   driveStatus: number;
+  /** Сколько запросов к Drive (`files.get`): проверка корзины и прав на файл. */
+  driveRequests: number;
   /**
    * Файлы, которые Google не показывает Ketner (404 в Drive и Sheets): так после отзыва доступа
    * `drive.file` перестаёт покрывать таблицу, созданную раньше.
@@ -85,6 +87,7 @@ export function createFakeGoogle(): FakeGoogle {
     readStatus: 200,
     trashed: false,
     driveStatus: 200,
+    driveRequests: 0,
     noAccess: new Set(),
     files: new Map(),
     grant: {},
@@ -164,6 +167,7 @@ export function createFakeGoogle(): FakeGoogle {
         return Response.json({ values: [['ID заявки', ...ids]] });
       }
       if (url.startsWith('https://www.googleapis.com/drive/v3/files/')) {
+        fake.driveRequests += 1;
         const fileId = decodeURIComponent(
           url.slice('https://www.googleapis.com/drive/v3/files/'.length).split('?')[0]!,
         );

@@ -10,7 +10,7 @@ import {
 } from '../testing/fake-google.js';
 import { createGoogleConnectionStore, type GoogleConnectionStore } from './connection-store.js';
 import { RETRY_PAUSES_MS, MemoryDeliveryJournal } from './delivery-journal.js';
-import { RECONCILE_RESOLVER, SheetsDelivery } from './delivery.js';
+import { RECONCILE_RESOLVER, SheetsDelivery, TRASH_BEFORE_WRITE_MS } from './delivery.js';
 import { brokenConnectionText } from './delivery-runtime.js';
 import { LEAD_SHEET_COLUMNS } from './sheets.js';
 
@@ -346,14 +346,14 @@ test('тексты уведомлений о поломке: без данных
   assert.match(missing.subject, /удалена/);
 });
 
-test('корзина замечается до записи (не чаще раза в 10 минут): заявка ждёт, одно уведомление; «проверить снова» после восстановления', async () => {
+test('корзина замечается до записи (если прошлой проверке больше минуты): заявка ждёт, одно уведомление; «проверить снова» после восстановления', async () => {
   const h = await harness();
   await h.lead('lead-1');
   assert.equal(h.google.rows.get(SHEET)?.length, 1);
 
-  // Владелец отправил таблицу в корзину; через 10 минут после прошлой проверки — новая проверка.
+  // Владелец отправил таблицу в корзину; через минуту после прошлой проверки — новая проверка.
   h.google.trashed = true;
-  later(h, 11 * 60_000);
+  later(h, TRASH_BEFORE_WRITE_MS + 1);
   await h.lead('lead-2');
   assert.equal(h.google.rows.get(SHEET)?.length, 1, 'в таблицу из корзины не пишем');
   assert.equal(h.connections.get(OWNER)?.status, 'sheet_missing');
@@ -372,6 +372,45 @@ test('корзина замечается до записи (не чаще ра�
   assert.equal(await h.delivery.backfill(OWNER), 1);
   assert.equal(h.google.rows.get(SHEET)?.length, 2);
   assert.equal(h.notified.length, 1);
+});
+
+test('окно проверки корзины — минута (в пилоте 10 минут: две заявки ушли в таблицу из корзины)', async () => {
+  assert.equal(TRASH_BEFORE_WRITE_MS, 60_000);
+  const h = await harness();
+  await h.lead('lead-1');
+  h.google.trashed = true;
+  // Внутри минуты после проверки — запись без новой проверки (известная граница окна).
+  later(h, 30_000);
+  await h.lead('lead-2');
+  assert.equal(h.google.rows.get(SHEET)?.length, 2);
+  // Через минуту — проверка до записи: третья заявка в корзину не уходит.
+  later(h, 31_000);
+  await h.lead('lead-3');
+  assert.equal(h.google.rows.get(SHEET)?.length, 2);
+  assert.equal(h.connections.get(OWNER)?.status, 'sheet_missing');
+});
+
+test('не больше одного запроса к Drive на запись, в том числе когда запись не удалась', async () => {
+  const h = await harness();
+  // Каждая заявка — через минуту с лишним: одна проверка корзины на запись.
+  for (const [index, id] of ['lead-1', 'lead-2', 'lead-3'].entries()) {
+    const before = h.google.driveRequests;
+    if (index > 0) later(h, TRASH_BEFORE_WRITE_MS + 1);
+    await h.lead(id);
+    assert.equal(h.google.driveRequests - before, 1, id);
+  }
+  // Запись отклонена (500): проверка перед записью уже была — второго запроса к Drive нет.
+  later(h, TRASH_BEFORE_WRITE_MS + 1);
+  h.google.appendStatus = 500;
+  const before = h.google.driveRequests;
+  await h.lead('lead-4');
+  assert.equal(h.google.driveRequests - before, 1);
+  // Заявки подряд внутри минуты — без запросов к Drive.
+  h.google.appendStatus = 200;
+  const burst = h.google.driveRequests;
+  await h.lead('lead-5');
+  await h.lead('lead-6');
+  assert.equal(h.google.driveRequests, burst);
 });
 
 test('пилот: доставка только для аккаунтов, для которых Google Таблицы включены', async () => {
