@@ -13,8 +13,8 @@ export const SUPPORT_EMAIL = 'ketner.support@gmail.com';
 
 /** Дата редакции каждого документа (ISO). Дату для sitemap берёт entry-prerender.tsx. */
 export const LEGAL_UPDATED: Record<LegalPageId, string> = {
-  // Тарифы вместо кредитов (задача 0b): соглашение и политика — 20.11.2026.
-  privacy: '2026-11-20',
+  // Тарифы вместо кредитов (задача 0b) — 20.11.2026; политика: почтовый сервис Resend — 23.11.2026.
+  privacy: '2026-11-23',
   terms: '2026-11-20',
   // Тарифы вместо пакетов кредитов (задача 0b).
   'payment-terms': '2026-11-20',
@@ -121,7 +121,7 @@ const RU: Record<LegalPageId, LegalContent> = {
       {
         title: '3. Где хранятся данные и передача за границу',
         paragraphs: [
-          'Сервер Ketner AI работает на хостинге Render, данные хранятся в базе PostgreSQL у провайдера Supabase. Сервер и база находятся в Германии, во Франкфурте (регион EU Central). Трафик сайта проходит через сеть Cloudflare, а запросы к моделям — через OpenRouter и серверы разработчиков моделей, которые могут находиться в других странах, в том числе в США.',
+          'Сервер Ketner AI работает на хостинге Render, данные хранятся в базе PostgreSQL у провайдера Supabase. Сервер и база находятся в Германии, во Франкфурте (регион EU Central). Трафик сайта проходит через сеть Cloudflare, а запросы к моделям — через OpenRouter и серверы разработчиков моделей, которые могут находиться в других странах, в том числе в США. Письма отправляются через почтовый сервис Resend, его серверы тоже могут находиться в США.',
           'Законы о защите данных в этих странах могут отличаться от законов вашей страны. Мы передаём только то, что нужно для работы запроса, а при передаче данных из ЕС, ЕЭЗ и Великобритании за их пределы опираемся на механизмы, которые предлагают сами провайдеры (например, участие в Data Privacy Framework или стандартные договорные положения ЕС). Подробности по запросу.',
           'Диск сервера временный и очищается при каждом обновлении сайта, поэтому всё, что должно сохраниться (аккаунты, чаты, платежи, проекты, картинки), записывается в базу данных.',
         ],
@@ -176,6 +176,7 @@ const RU: Record<LegalPageId, LegalContent> = {
           'Поставщики моделей и инфраструктуры ИИ: OpenRouter и разработчики моделей, Cloudflare и Runware (картинки) — текст запроса и текст из вложений, чтобы получить ответ (раздел 5).',
           'Платёжные провайдеры — по платежам, которые прошли через них: Trybit (криптовалюта) и Telegram (звёзды) — сведения о счёте и пакете по покупкам до 20 ноября 2026 г. и их возвратам.',
           'Хостинг и база данных: Render, Supabase, Cloudflare.',
+          'Почтовый сервис Resend — адрес получателя и текст письма: коды входа и регистрации, письма владельцам о заявках ботов (имя, контакт и вопрос клиента) и о работе подключённых сервисов.',
           'Google Ads: на сайте работает тег Google, который получает данные о посещении страниц, а после оплаты на сайте — сумму покупки (без имени и почты).',
           'Google Таблицы — только если вы сами подключите свою таблицу: заявки ваших ботов (дата, бот, имя, контакт, вопрос и ссылка на диалог) записываются в таблицу в вашем Google Диске. Ketner получает доступ только к файлам, которые сам создал или которые вы выбрали (разрешение drive.file), хранит ключ доступа в зашифрованном виде, а отключить таблицу можно в любой момент. Данные из API Google используются по правилам Google API Services User Data Policy, включая требования Limited Use. Возможность появится позже: этот пункт начнёт действовать с её запуском, до этого данные в Google Таблицы не передаются.',
           'Вход через Google и GitHub — если вы выбрали этот способ.',
@@ -427,7 +428,7 @@ const EN: Record<LegalPageId, LegalContent> = {
       {
         title: '3. Where data is stored and transfers abroad',
         paragraphs: [
-          'The Ketner AI server runs on Render hosting, and data is kept in a PostgreSQL database at Supabase. Both the server and the database are in Germany, in Frankfurt (EU Central region). Site traffic passes through the Cloudflare network, and requests to models go through OpenRouter and the servers of model developers, which may be located in other countries, including the United States.',
+          'The Ketner AI server runs on Render hosting, and data is kept in a PostgreSQL database at Supabase. Both the server and the database are in Germany, in Frankfurt (EU Central region). Site traffic passes through the Cloudflare network, and requests to models go through OpenRouter and the servers of model developers, which may be located in other countries, including the United States. Emails are sent through the Resend email service, whose servers may also be in the United States.',
           'Data protection laws in those countries may differ from the laws of your country. We send only what a request needs, and when data from the EU, EEA or UK is transferred outside them we rely on the mechanisms the providers themselves offer (for example, Data Privacy Framework participation or EU standard contractual clauses). Details on request.',
           'The server disk is temporary and is wiped on every site update, so everything that must persist (accounts, chats, payments, projects, pictures) is written to the database.',
         ],
@@ -482,6 +483,7 @@ const EN: Record<LegalPageId, LegalContent> = {
           'Model and AI infrastructure providers: OpenRouter and model developers, Cloudflare and Runware (pictures) — the request text and the text from attachments, to get a reply (section 5).',
           'Payment providers, for payments made through them: Trybit (cryptocurrency) and Telegram (Stars) — invoice and pack details for purchases before November 20, 2026 and their refunds.',
           'Hosting and database: Render, Supabase, Cloudflare.',
+          'The Resend email service — the recipient address and the email text: sign-in and sign-up codes, emails to owners about bot requests (the customer’s name, contact and question) and about connected services.',
           'Google Ads: the site runs a Google tag that receives data about page visits and, after a payment on the site, the purchase amount (without name or email).',
           'Google Sheets — only if you connect your own sheet: your bots’ requests (date, bot, name, contact, question and a link to the conversation) are written to a sheet in your Google Drive. Ketner gets access only to files it created or that you picked (the drive.file permission), keeps the access key encrypted, and you can disconnect the sheet at any time. Data from Google APIs is used under the Google API Services User Data Policy, including the Limited Use requirements. This feature is coming later: this item takes effect when it launches, and until then no data is sent to Google Sheets.',
           'Sign-in with Google and GitHub — if you chose that method.',

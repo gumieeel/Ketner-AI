@@ -83,7 +83,7 @@ describe('правовые страницы и контакты', () => {
   });
 
   it.each([
-    ['/privacy', 'Privacy Policy', 'November 20, 2026'],
+    ['/privacy', 'Privacy Policy', 'November 23, 2026'],
     ['/terms', 'Terms of Service and Public Offer', 'November 20, 2026'],
     ['/payment-terms', 'Payments and Refunds', 'November 20, 2026'],
   ])('%s на английском: заголовок, дата редакции и навигация переведены', (path, title, date) => {
@@ -162,6 +162,19 @@ describe('правовые страницы и контакты', () => {
       .join(' ');
     expect(ru).toMatch(/Возможность появится позже: этот пункт начнёт действовать с её запуском/);
     expect(ru).toMatch(/тариф \(или пакет кредитов — для покупок до 20 ноября 2026 г\.\)/);
+  });
+
+  it('политика: почтовый сервис Resend назван — кому передаём и что (адрес и текст письма)', () => {
+    for (const [language, pattern] of [
+      ['ru', /Почтовый сервис Resend — адрес получателя и текст письма/],
+      ['en', /The Resend email service — the recipient address and the email text/],
+    ] as const) {
+      const doc = getLegalDocument('privacy', language);
+      expect(doc.sections.flatMap((section) => section.items ?? []).join(' ')).toMatch(pattern);
+      expect(doc.sections.flatMap((section) => section.paragraphs ?? []).join(' ')).toMatch(
+        /Resend/,
+      );
+    }
   });
 
   it('условия возврата на английском называют окно в 14 дней и право отказа по закону', () => {
