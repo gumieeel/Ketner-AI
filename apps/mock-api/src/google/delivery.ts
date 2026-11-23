@@ -27,10 +27,13 @@ import { GoogleOAuthError, refreshGoogleAccessToken, type GoogleOAuthSettings } 
 import {
   GoogleSheetsError,
   appendLeadRow,
+  checkLeadSpreadsheet,
   createLeadSpreadsheet,
   leadRow,
   sheetHasLead,
   spreadsheetTrashed,
+  spreadsheetUrlOf,
+  type LeadSheetCheck,
 } from './sheets.js';
 
 export type LeadDeliveryState = 'written' | 'writing' | 'failed' | 'waiting';
@@ -509,6 +512,66 @@ export class SheetsDelivery {
     return updated?.after;
   }
 
+  /**
+   * Access-токен для Google Picker в браузере владельца (кнопка «Выбрать прежнюю таблицу»).
+   * Только при живом подключении; живёт около часа, разрешения — те же `drive.file`.
+   */
+  async pickerToken(userId: string): Promise<string> {
+    const connection = this.deps.connections.get(userId);
+    if (!connection || connection.status === 'disconnected') {
+      throw new GoogleSheetsError('disconnected');
+    }
+    try {
+      return await this.accessToken(userId);
+    } catch (error) {
+      throw new GoogleSheetsError(error instanceof AccessError ? error.code : 'unavailable');
+    }
+  }
+
+  /**
+   * Таблица, выбранная владельцем в Google Picker: Google Таблица не в корзине, с листом «Заявки»
+   * и колонками Ketner — тогда заявки снова пишутся в неё. Иначе — отказ с причиной.
+   */
+  async pickSheet(userId: string, spreadsheetId: string): Promise<PickSheetResult> {
+    const connection = this.deps.connections.get(userId);
+    if (!connection || connection.status === 'disconnected') return { result: 'not_connected' };
+    let token: string;
+    try {
+      token = await this.accessToken(userId);
+    } catch (error) {
+      const code = error instanceof AccessError ? error.code : 'unavailable';
+      return {
+        result:
+          code === 'invalid_grant' || code === 'token_unreadable' || code === 'disconnected'
+            ? 'reconnect_required'
+            : 'unavailable',
+      };
+    }
+    let check: LeadSheetCheck;
+    try {
+      check = await checkLeadSpreadsheet(token, spreadsheetId, this.fetchImpl);
+    } catch (error) {
+      if (error instanceof GoogleSheetsError && error.code === 'invalid_grant') {
+        this.tokens.delete(userId);
+      }
+      return { result: 'unavailable' };
+    }
+    if (check !== 'ok') return { result: check };
+    const updated = await this.deps.connections.update(
+      userId,
+      {
+        status: 'connected',
+        lastErrorCode: null,
+        spreadsheet: { id: spreadsheetId, url: spreadsheetUrlOf(spreadsheetId) },
+      },
+      new Date(this.now()),
+    );
+    if (!updated) return { result: 'not_connected' };
+    this.trashCheckedAt.set(userId, this.now());
+    this.log(`[sheets] подключение ${userId}: выбрана прежняя таблица`);
+    return { result: 'ok', connection: updated.after };
+  }
+
   /** «Создать новую таблицу» после `sheet_missing`. */
   async newSheet(userId: string): Promise<GoogleConnection> {
     const connection = this.deps.connections.get(userId);
@@ -536,6 +599,11 @@ export class SheetsDelivery {
     return updated.after;
   }
 }
+
+export type PickSheetResult =
+  | { result: 'ok'; connection: GoogleConnection }
+  | { result: Exclude<LeadSheetCheck, 'ok'> }
+  | { result: 'not_connected' | 'reconnect_required' | 'unavailable' };
 
 export function stateOf(effect: DeliveryEffect): LeadDeliveryState {
   if (effect.status === 'committed') return 'written';

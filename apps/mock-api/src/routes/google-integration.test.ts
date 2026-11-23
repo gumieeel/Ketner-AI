@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setProductSwitchForTests } from '../product-switches.js';
-import { codeChallengeS256, readGoogleState } from '../google/oauth.js';
+import { codeChallengeS256, googleDiagnostics, readGoogleState } from '../google/oauth.js';
 import { readJson, startTestServer, type TestServer } from '../testing/server.js';
 import { signupAndVerify } from '../testing/signup.js';
 import { DRIVE_FILE, FAKE_GOOGLE_SETTINGS, createFakeGoogle } from '../testing/fake-google.js';
@@ -19,9 +19,12 @@ interface Status {
   lastErrorCode: string | null;
 }
 
+const PICKER = { apiKey: 'AIzaSyTest-picker-key_0123456789', appId: '123456789012' };
+
 async function setup(
   t: test.TestContext,
   settings: () => typeof FAKE_GOOGLE_SETTINGS | null = () => FAKE_GOOGLE_SETTINGS,
+  picker: () => typeof PICKER | null = () => null,
 ) {
   const google = createFakeGoogle();
   const logs: string[] = [];
@@ -29,7 +32,7 @@ async function setup(
   console.warn = (...args: unknown[]) => logs.push(args.map(String).join(' '));
   const server = await startTestServer(
     {},
-    { googleFetch: google.fetchImpl, googleSettings: settings },
+    { googleFetch: google.fetchImpl, googleSettings: settings, googlePicker: picker },
   );
   t.after(async () => {
     console.warn = originalWarn;
@@ -109,6 +112,8 @@ test('подключение: start → callback → confirm; verifier толь�
     spreadsheetUrl: null,
     lastErrorCode: null,
     connectedAt: null,
+    previousSheetUrl: null,
+    picker: false,
     pending: 0,
   });
 
@@ -265,7 +270,10 @@ test('без drive.file: отказ с понятным текстом, токе
   assert.equal(response.status, 400);
   const body = await readJson<{ error: { code: string; message: string } }>(response);
   assert.equal(body.error.code, 'google_missing_drive_file');
-  assert.match(body.error.message, /разрешения на файлы/);
+  assert.equal(
+    body.error.message,
+    'Вы не дали доступ к Google Диску. Нажмите «Подключить снова» и отметьте доступ к файлам.',
+  );
   assert.deepEqual(google.revoked, ['1//fake-refresh']);
 });
 
@@ -374,4 +382,156 @@ test('часовой пояс владельца: из браузера при �
     body.sheets[0]!.data[0]!.rowData[0]!.values[0]!.userEnteredValue.stringValue,
     'Дата',
   );
+});
+
+/** id таблицы из её адреса. */
+function sheetIdOf(url: string | null): string {
+  return /\/spreadsheets\/d\/([^/]+)/.exec(url ?? '')![1]!;
+}
+
+interface CardStatus extends Status {
+  previousSheetUrl: string | null;
+  picker: boolean;
+  pending?: number;
+}
+
+/** Подключить, затем «отозвать доступ» (прежняя таблица больше не видна) и подключить снова. */
+async function reconnectAfterRevoke(
+  server: TestServer,
+  google: ReturnType<typeof createFakeGoogle>,
+  owner: AuthSession,
+) {
+  const first = await startAndCallback(server, owner, 'code-a');
+  const before = await readJson<CardStatus>(await confirm(server, owner, first.code, first.state));
+  const oldId = sheetIdOf(before.spreadsheetUrl);
+  google.noAccess.add(oldId);
+  google.grant = { refreshToken: '1//after-revoke' };
+  const second = await startAndCallback(server, owner, 'code-b');
+  const response = await confirm(server, owner, second.code, second.state);
+  assert.equal(response.status, 200);
+  return { before, oldId, after: await readJson<CardStatus>(response) };
+}
+
+test('переподключение после отзыва: прежняя таблица не видна — новая таблица и ссылка на прежнюю', async (t) => {
+  const { server, google } = await setup(t);
+  const owner = await signup(server, 'owner');
+  const lines: string[] = [];
+  const originalDiag = googleDiagnostics.log;
+  googleDiagnostics.log = (line) => lines.push(line);
+  t.after(() => {
+    googleDiagnostics.log = originalDiag;
+  });
+
+  const { before, oldId, after } = await reconnectAfterRevoke(server, google, owner);
+  assert.equal(after.status, 'connected');
+  assert.notEqual(after.spreadsheetUrl, before.spreadsheetUrl, 'заявки пойдут в новую таблицу');
+  assert.equal(google.sheetsCreated.length, 2);
+  assert.equal(after.previousSheetUrl, before.spreadsheetUrl, 'ссылка на прежнюю таблицу');
+  assert.equal(after.picker, false, 'Picker не настроен — кнопки нет');
+  assert.ok(lines.includes('переподключение: прежняя таблица — no_access'));
+  assert.equal(server.googlePrefsStore.lostSheetOf(owner.user.id)?.id, oldId);
+
+  // То же в статусе карточки; «Понятно» убирает сообщение.
+  const status = await readJson<CardStatus>(await call(server, owner, 'GET', ''));
+  assert.equal(status.previousSheetUrl, before.spreadsheetUrl);
+  const dismissed = await readJson<CardStatus>(
+    await call(server, owner, 'POST', '/previous-sheet/dismiss', {}),
+  );
+  assert.equal(dismissed.previousSheetUrl, null);
+  assert.equal(server.googlePrefsStore.lostSheetOf(owner.user.id), null);
+});
+
+test('переподключение: прежняя таблица видна — остаётся; сбой проверки — тоже остаётся', async (t) => {
+  const { server, google } = await setup(t);
+  const owner = await signup(server, 'owner');
+  const first = await startAndCallback(server, owner, 'code-a');
+  const before = await readJson<CardStatus>(await confirm(server, owner, first.code, first.state));
+
+  google.driveStatus = 503;
+  google.grant = { refreshToken: '1//second' };
+  const second = await startAndCallback(server, owner, 'code-b');
+  const after = await readJson<CardStatus>(await confirm(server, owner, second.code, second.state));
+  assert.equal(after.spreadsheetUrl, before.spreadsheetUrl);
+  assert.equal(after.previousSheetUrl, null);
+  assert.equal(google.sheetsCreated.length, 1);
+});
+
+test('отключение забывает прежнюю таблицу', async (t) => {
+  const { server, google } = await setup(t);
+  const owner = await signup(server, 'owner');
+  await reconnectAfterRevoke(server, google, owner);
+  await call(server, owner, 'DELETE', '/connection');
+  assert.equal(server.googlePrefsStore.lostSheetOf(owner.user.id), null);
+  const status = await readJson<CardStatus>(await call(server, owner, 'GET', ''));
+  assert.equal(status.previousSheetUrl, null);
+});
+
+test('«Выбрать прежнюю таблицу»: токен для Picker, проверка файла на сервере, отказы с причиной', async (t) => {
+  const { server, google } = await setup(
+    t,
+    () => FAKE_GOOGLE_SETTINGS,
+    () => PICKER,
+  );
+  const owner = await signup(server, 'owner');
+  const { before, oldId, after } = await reconnectAfterRevoke(server, google, owner);
+  assert.equal(after.picker, true);
+
+  // Без входа — нельзя.
+  assert.equal((await call(server, null, 'POST', '/picker-token', {})).status, 401);
+  const tokenResponse = await call(server, owner, 'POST', '/picker-token', {});
+  assert.equal(tokenResponse.status, 200);
+  const tokenText = await tokenResponse.text();
+  const token = JSON.parse(tokenText) as { accessToken: string; apiKey: string; appId: string };
+  assert.match(token.accessToken, /^ya29\.refreshed-/);
+  assert.equal(token.apiKey, PICKER.apiKey);
+  assert.equal(token.appId, PICKER.appId);
+  assert.ok(!tokenText.includes('after-revoke'), 'refresh-токен в браузер не уходит');
+
+  const pick = (spreadsheetId: unknown) =>
+    call(server, owner, 'POST', '/pick-sheet', { spreadsheetId });
+  const refusal = async (spreadsheetId: unknown) => {
+    const response = await pick(spreadsheetId);
+    const body = await readJson<{ error: { code: string; message: string } }>(response);
+    return { status: response.status, ...body.error };
+  };
+
+  assert.equal((await refusal('../etc')).status, 400);
+  google.files.set('doc-file-0123456789', { mimeType: 'application/vnd.google-apps.document' });
+  assert.deepEqual(await refusal('doc-file-0123456789'), {
+    status: 422,
+    code: 'sheet_not_spreadsheet',
+    message: 'Это не Google Таблица. Выберите таблицу «Заявки Ketner».',
+  });
+  google.files.set('other-sheet-0123456789', { header: ['Имя', 'Телефон'] });
+  assert.equal((await refusal('other-sheet-0123456789')).code, 'sheet_wrong_header');
+  google.files.set('no-tab-sheet-0123456789', { header: null });
+  assert.equal((await refusal('no-tab-sheet-0123456789')).code, 'sheet_wrong_header');
+  google.files.set('trashed-sheet-0123456789', { trashed: true, header: [...LEAD_SHEET_COLUMNS] });
+  assert.equal((await refusal('trashed-sheet-0123456789')).code, 'sheet_trashed');
+  // Прежняя таблица, пока Google не дал к ней доступ (Picker закрыли без выбора).
+  assert.equal((await refusal(oldId)).code, 'sheet_no_access');
+  // Отказы ничего не меняют: заявки по-прежнему идут в новую таблицу.
+  assert.equal(
+    (await readJson<CardStatus>(await call(server, owner, 'GET', ''))).spreadsheetUrl,
+    after.spreadsheetUrl,
+  );
+
+  // Владелец выбрал прежнюю таблицу в Picker — Google дал доступ к ней.
+  google.noAccess.delete(oldId);
+  const picked = await pick(oldId);
+  assert.equal(picked.status, 200);
+  const status = await readJson<CardStatus>(picked);
+  assert.equal(status.status, 'connected');
+  assert.equal(status.spreadsheetUrl, before.spreadsheetUrl, 'заявки снова пишутся в прежнюю');
+  assert.equal(status.previousSheetUrl, null, 'сообщение о прежней таблице убрано');
+  assert.equal(server.googleConnectionStore.get(owner.user.id)?.spreadsheetId, oldId);
+});
+
+test('Picker не настроен — токен не выдаётся', async (t) => {
+  const { server } = await setup(t);
+  const owner = await signup(server, 'owner');
+  const { state, code } = await startAndCallback(server, owner);
+  await confirm(server, owner, code, state);
+  const response = await call(server, owner, 'POST', '/picker-token', {});
+  assert.equal(response.status, 404);
 });

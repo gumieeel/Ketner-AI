@@ -10,15 +10,23 @@ import {
   createGoogleState,
   exchangeGoogleCode,
   googleAuthorizeUrl,
+  googleDiagnostics,
   googleOAuthSettings,
+  googlePickerConfig,
   readGoogleState,
   revokeGoogleToken,
   withFragment,
   type GoogleOAuthSettings,
+  type GooglePickerConfig,
 } from '../google/oauth.js';
-import { GoogleSheetsError, createLeadSpreadsheet } from '../google/sheets.js';
+import {
+  GoogleSheetsError,
+  checkLeadSpreadsheet,
+  createLeadSpreadsheet,
+  validSpreadsheetId,
+} from '../google/sheets.js';
 import type { GoogleVerifierStore } from '../google/verifier-store.js';
-import type { SheetsDelivery } from '../google/delivery.js';
+import type { PickSheetResult, SheetsDelivery } from '../google/delivery.js';
 import type { GooglePrefsStore } from '../google/prefs.js';
 import type { BuilderStore } from '../builder/store.js';
 
@@ -27,6 +35,8 @@ export interface GoogleIntegrationRouterDeps {
   verifiers: GoogleVerifierStore;
   /** Подмена настроек OAuth в тестах; по умолчанию — из переменных окружения. */
   settings?: () => GoogleOAuthSettings | null;
+  /** Ключ и номер проекта для Google Picker; по умолчанию — из переменных окружения. */
+  picker?: () => GooglePickerConfig | null;
   fetchImpl?: typeof fetch;
   log?: (message: string) => void;
   /** Доставка заявок (шаг 4): отметки у заявок, повтор, «дописать пропущенные», новая таблица. */
@@ -36,6 +46,49 @@ export interface GoogleIntegrationRouterDeps {
   /** Часовой пояс владельца: браузер присылает его при подключении и открытии кабинета. */
   prefs?: GooglePrefsStore;
 }
+
+/** Почему выбранный файл не подошёл — текст для владельца. */
+const PICK_REFUSALS: Record<
+  Exclude<PickSheetResult['result'], 'ok'>,
+  { status: number; code: string; message: string }
+> = {
+  not_spreadsheet: {
+    status: 422,
+    code: 'sheet_not_spreadsheet',
+    message: 'Это не Google Таблица. Выберите таблицу «Заявки Ketner».',
+  },
+  wrong_header: {
+    status: 422,
+    code: 'sheet_wrong_header',
+    message:
+      'В этой таблице нет листа «Заявки» с колонками Ketner (Дата, Бот, Имя, Контакт, Вопрос, Диалог, ID заявки). Выберите таблицу «Заявки Ketner», которую создал Ketner.',
+  },
+  trashed: {
+    status: 422,
+    code: 'sheet_trashed',
+    message: 'Эта таблица в корзине Google Диска. Восстановите её и выберите снова.',
+  },
+  no_access: {
+    status: 422,
+    code: 'sheet_no_access',
+    message: 'Google не дал Ketner доступ к этому файлу. Выберите таблицу ещё раз в окне Google.',
+  },
+  not_connected: {
+    status: 409,
+    code: 'google_not_connected',
+    message: 'Сначала подключите Google Таблицу.',
+  },
+  reconnect_required: {
+    status: 409,
+    code: 'google_reconnect_required',
+    message: 'Доступ к Google отозван. Подключите таблицу снова.',
+  },
+  unavailable: {
+    status: 502,
+    code: 'google_unavailable',
+    message: 'Google не ответил. Попробуйте ещё раз через минуту.',
+  },
+};
 
 /** Что видит сайт: без токенов и без `sub`. */
 function publicStatus(connection: GoogleConnection | undefined) {
@@ -64,6 +117,7 @@ export function createGoogleIntegrationRouter({
   store,
   verifiers,
   settings: injected,
+  picker: injectedPicker,
   fetchImpl: injectedFetch,
   log: injectedLog,
   delivery,
@@ -71,6 +125,20 @@ export function createGoogleIntegrationRouter({
   prefs,
 }: GoogleIntegrationRouterDeps): Router {
   const settings = injected ?? googleOAuthSettings;
+  const pickerConfig = injectedPicker ?? googlePickerConfig;
+  /**
+   * Состояние для карточки: подключение, прежняя таблица, которую Ketner больше не может открыть
+   * (ссылка), и есть ли кнопка «Выбрать прежнюю таблицу» (настроен Google Picker).
+   */
+  const cardStatus = (userId: string, connection = store.get(userId)) => {
+    const active = Boolean(connection && connection.status !== 'disconnected');
+    const lost = active ? (prefs?.lostSheetOf(userId) ?? null) : null;
+    return {
+      ...publicStatus(connection),
+      previousSheetUrl: lost?.url ?? null,
+      picker: active && Boolean(delivery) && pickerConfig() !== null,
+    };
+  };
   const fetchImpl = injectedFetch ?? fetch;
   const log = injectedLog ?? ((message: string) => console.warn(message));
   const router = Router();
@@ -96,7 +164,7 @@ export function createGoogleIntegrationRouter({
     prefs?.rememberTimeZone(userId, request.query.timeZone);
     const connection = store.get(userId);
     response.json({
-      ...publicStatus(connection),
+      ...cardStatus(userId, connection),
       // Сколько заявок не записано: кнопка «дописать пропущенные».
       pending: connection && delivery ? await delivery.pending(userId) : 0,
     });
@@ -294,6 +362,26 @@ export function createGoogleIntegrationRouter({
       previous && previous.googleSub === grant.identity.sub && previous.spreadsheetId
         ? { id: previous.spreadsheetId, url: previous.spreadsheetUrl ?? '' }
         : null;
+    // Видит ли Ketner прежнюю таблицу с новым доступом. После отзыва доступа в аккаунте Google
+    // `drive.file` её больше не покрывает (проверено в пилоте 22.11): Google отвечает 404. Тогда —
+    // новая таблица и на карточке ссылка на прежнюю и «Выбрать прежнюю таблицу». Сбой Google при
+    // проверке — таблица остаётся прежней (доставка разберётся сама).
+    let lostSheet: { id: string; url: string } | null = null;
+    if (spreadsheet) {
+      try {
+        const check = await checkLeadSpreadsheet(grant.accessToken, spreadsheet.id, fetchImpl, {
+          header: false,
+        });
+        googleDiagnostics.log(`переподключение: прежняя таблица — ${check}`);
+        if (check === 'no_access') {
+          lostSheet = spreadsheet;
+          spreadsheet = null;
+        }
+      } catch (error) {
+        const code = error instanceof GoogleSheetsError ? error.code : 'unavailable';
+        googleDiagnostics.log(`переподключение: проверка прежней таблицы не удалась — ${code}`);
+      }
+    }
     let sheetErrorCode: string | null = null;
     if (!spreadsheet) {
       try {
@@ -327,19 +415,93 @@ export function createGoogleIntegrationRouter({
       throw error;
     }
     delivery?.forget(userId);
+    if (lostSheet) {
+      await prefs?.setLostSheet(userId, lostSheet).catch((error: unknown) => {
+        log(`[google] прежняя таблица аккаунта ${userId} не записана: ${String(error)}`);
+      });
+    }
     if (previousToken && previousToken !== grant.refreshToken) {
       if (!(await revokeGoogleToken(previousToken, fetchImpl))) {
         log(`[google] отзыв прежнего доступа аккаунта ${userId} не удался`);
       }
     }
-    response.json(publicStatus(saved));
+    response.json(cardStatus(userId, saved));
   });
+
+  // Google Picker в браузере владельца: короткий access-токен (около часа, те же `drive.file`),
+  // ключ API и номер проекта. Только при живом подключении и настроенном Picker.
+  router.post(`${base}/picker-token`, requireAuth, async (request: Request, response: Response) => {
+    const userId = request.user!.id;
+    const config = pickerConfig();
+    const connection = store.get(userId);
+    if (!config || !delivery) {
+      sendError(response, 404, 'picker_unavailable', 'Выбор таблицы сейчас недоступен.');
+      return;
+    }
+    if (!connection || connection.status === 'disconnected') {
+      sendError(response, 409, 'google_not_connected', 'Сначала подключите Google Таблицу.');
+      return;
+    }
+    try {
+      const accessToken = await delivery.pickerToken(userId);
+      googleDiagnostics.log('выбор таблицы: выдан токен для Google Picker');
+      response.json({ accessToken, apiKey: config.apiKey, appId: config.appId });
+    } catch (error) {
+      const code = error instanceof GoogleSheetsError ? error.code : 'unavailable';
+      const reconnect =
+        code === 'invalid_grant' || code === 'token_unreadable' || code === 'disconnected';
+      sendError(
+        response,
+        reconnect ? 409 : 502,
+        reconnect ? 'google_reconnect_required' : 'google_unavailable',
+        reconnect
+          ? 'Доступ к Google отозван. Подключите таблицу снова.'
+          : 'Google не ответил. Попробуйте ещё раз через минуту.',
+      );
+    }
+  });
+
+  // Таблица, выбранная в Google Picker: проверяем на сервере и пишем заявки в неё.
+  router.post(`${base}/pick-sheet`, requireAuth, async (request: Request, response: Response) => {
+    const userId = request.user!.id;
+    const spreadsheetId = (request.body as { spreadsheetId?: unknown } | undefined)?.spreadsheetId;
+    if (!delivery || !validSpreadsheetId(spreadsheetId)) {
+      sendError(response, 400, 'invalid_request', 'Не удалось прочитать выбранный файл.');
+      return;
+    }
+    const picked = await delivery.pickSheet(userId, spreadsheetId);
+    googleDiagnostics.log(`выбор таблицы: ${picked.result}`);
+    if (picked.result === 'ok') {
+      await prefs?.setLostSheet(userId, null).catch((error: unknown) => {
+        log(`[google] прежняя таблица аккаунта ${userId} не забыта: ${String(error)}`);
+      });
+      response.json({
+        ...cardStatus(userId, picked.connection),
+        pending: await delivery.pending(userId),
+      });
+      return;
+    }
+    const refusal = PICK_REFUSALS[picked.result];
+    sendError(response, refusal.status, refusal.code, refusal.message);
+  });
+
+  // «Понятно»: убрать сообщение о прежней таблице (ссылку на неё можно найти в Диске).
+  router.post(
+    `${base}/previous-sheet/dismiss`,
+    requireAuth,
+    async (request: Request, response: Response) => {
+      const userId = request.user!.id;
+      await prefs?.setLostSheet(userId, null);
+      response.json(cardStatus(userId));
+    },
+  );
 
   router.delete(`${base}/connection`, requireAuth, async (request: Request, response: Response) => {
     const userId = request.user!.id;
     const token = store.refreshTokenOf(userId);
     const connection = await store.disconnect(userId);
     delivery?.forget(userId);
+    await prefs?.setLostSheet(userId, null).catch(() => undefined);
     // Отзыв — по возможности: отключение в Ketner уже состоялось, токен стёрт.
     if (token && !(await revokeGoogleToken(token, fetchImpl))) {
       log(`[google] отзыв доступа при отключении аккаунта ${userId} не удался`);

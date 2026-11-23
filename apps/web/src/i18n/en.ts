@@ -2277,7 +2277,7 @@ export const en: Record<TranslationKey, string> = {
   'builder.bot.leads.done': 'Handled',
   'google.sheet.title': 'Google Sheet',
   'google.sheet.offer':
-    'Each new request from any of your bots will be added as a row to the "Заявки Ketner" sheet in your Google Drive. Ketner gets access only to files it creates itself.',
+    'Each new request from any of your bots will be added as a row to the "Заявки Ketner" sheet in your Google Drive. Ketner gets access only to files it creates itself or that you choose.',
   'google.sheet.connect': 'Save requests to a Google Sheet',
   'google.sheet.connected': 'New requests are saved to your Google Sheet.',
   'google.sheet.connectedAs': 'New requests are saved to your Google Sheet ({email}).',
@@ -2298,6 +2298,22 @@ export const en: Record<TranslationKey, string> = {
   'google.sheet.newSheetDone':
     'A new sheet was created. Press "Add missed requests" to copy them over.',
   'google.sheet.denied': 'You did not grant access to Google. The sheet is not connected.',
+  'google.sheet.noDriveAccess':
+    'You did not give access to Google Drive. Press “Connect again” and tick access to files.',
+  'google.sheet.previousLost':
+    'Ketner can no longer open your previous sheet: after Google access was revoked, the permission for it does not come back. Ketner created a new “Заявки Ketner” sheet, and new requests are saved there. The previous sheet is still in your Google Drive; Ketner did not delete it.',
+  'google.sheet.missingNoAccess':
+    'Ketner can no longer open the sheet: it was deleted for good, or Google closed Ketner’s access to it (this happens after access is revoked). Choose the previous sheet or create a new one. Requests are kept in Ketner and wait.',
+  'google.sheet.openPrevious': 'Open the previous sheet',
+  'google.sheet.pickPrevious': 'Choose the previous sheet',
+  'google.sheet.pickHint':
+    'A Google window opens: choose the “Заявки Ketner” sheet there. Ketner gets access to that file only.',
+  'google.sheet.pickTitle': 'Choose the “Заявки Ketner” sheet',
+  'google.sheet.pickDone':
+    'Requests are saved to the previous sheet again. What was written to the new sheet meanwhile stays there.',
+  'google.sheet.pickFailed':
+    'The Google window did not open. Try again, or open the previous sheet with the link.',
+  'google.sheet.dismissPrevious': 'Got it',
   'google.sheet.error': 'Could not connect the Google Sheet. Please try again.',
   'google.lead.written': 'in the sheet',
   'google.lead.writing': 'saving to the sheet',

@@ -27,7 +27,7 @@ import {
 import type { GithubConnectionStore } from '../github/connection-store.js';
 import type { GithubOAuthSettings } from '../github/oauth.js';
 import type { GoogleConnectionStore } from '../google/connection-store.js';
-import type { GoogleOAuthSettings } from '../google/oauth.js';
+import type { GoogleOAuthSettings, GooglePickerConfig } from '../google/oauth.js';
 import type { GoogleVerifierStore } from '../google/verifier-store.js';
 import type { GooglePrefsStore } from '../google/prefs.js';
 import { BillingService, createBillingLedger } from '../billing/billing-service.js';
@@ -116,6 +116,8 @@ export interface ApiDeps {
   googleFetch?: typeof fetch;
   /** Настройки OAuth Google Таблиц; в тестах подменяются. */
   googleSettings?: () => GoogleOAuthSettings | null;
+  /** Настройки Google Picker («Выбрать прежнюю таблицу»); в тестах подменяются. */
+  googlePicker?: () => GooglePickerConfig | null;
   /** Доставка заявок в Google Таблицу; в тестах — своя (обход вызывается вручную). */
   googleDelivery?: SheetsDelivery;
   /** Часовой пояс владельца для дат в Google Таблице; в тестах — в памяти. */
@@ -572,6 +574,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       verifiers: deps.googleVerifierStore ?? defaultGoogleVerifierStore,
       fetchImpl: deps.googleFetch,
       settings: deps.googleSettings,
+      picker: deps.googlePicker,
       delivery: sheetsDelivery,
       leads: () => platformStores()?.builder ?? null,
       prefs: activeGooglePrefs,

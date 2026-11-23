@@ -38,7 +38,10 @@ export function registerGoogleErasure(
           what: 'незавершённые подключения (google_oauth)',
           count: deps.verifiers?.idsOf(userId).length ?? 0,
         },
-        { what: 'часовой пояс (google_prefs)', count: deps.prefs?.timeZoneOf(userId) ? 1 : 0 },
+        {
+          what: 'часовой пояс и прежняя таблица (google_prefs)',
+          count: deps.prefs?.docs.get(userId) ? 1 : 0,
+        },
       ];
     },
 
@@ -69,7 +72,7 @@ export function registerGoogleErasure(
           { what: 'строка google_connections', count: removed ? 1 : 0 },
           { what: 'отзыв доступа Google', count: revoked },
           { what: 'незавершённые подключения (google_oauth)', count: verifiers },
-          { what: 'часовой пояс (google_prefs)', count: prefs },
+          { what: 'часовой пояс и прежняя таблица (google_prefs)', count: prefs },
         ],
         notes,
       };

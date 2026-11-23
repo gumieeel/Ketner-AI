@@ -144,7 +144,10 @@ export async function startTestServer(
   const codeMails: MailMessage[] = [];
   const innerMailer = extra.mailer;
   const testMailer: Mailer = {
-    kind: innerMailer?.kind ?? 'console',
+    // Вид почты читается каждый раз: тест может «выключить почту» после регистрации.
+    get kind() {
+      return innerMailer?.kind ?? 'console';
+    },
     async send(message) {
       if (isCodeMail(message)) {
         codeMails.push(message);

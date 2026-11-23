@@ -91,6 +91,7 @@ describe('Google Таблица в кабинете бота (этап F)', () =
     });
   });
   afterEach(() => {
+    delete (window as unknown as { google?: unknown }).google;
     setSiteFeatures(null);
     setProductSwitchesForTests({});
     window.history.replaceState(null, '', '/');
@@ -311,6 +312,242 @@ describe('Google Таблица в кабинете бота (этап F)', () =
     expect(
       await screen.findByText('Вы не дали доступ к Google. Таблица не подключена.'),
     ).toBeVisible();
+  });
+
+  it('на экране согласия сняли «Google Диск»: понятная причина и «Подключить снова»', async () => {
+    setProductSwitchesForTests({ googleSheets: true });
+    window.history.replaceState(null, '', '/solutions/b1#google_code=c-2&google_state=s-2');
+    const calls = cabinet((call) => {
+      if (call.path === '/api/integrations/google/confirm') {
+        return json(400, {
+          error: {
+            code: 'google_missing_drive_file',
+            message:
+              'Вы не дали доступ к Google Диску. Нажмите «Подключить снова» и отметьте доступ к файлам.',
+          },
+        });
+      }
+      if (call.path.split('?')[0] === '/api/integrations/google') {
+        return json(200, { ...CONNECTED, connected: false, status: null, pending: 0 });
+      }
+      if (call.path.startsWith('/api/integrations/google/deliveries'))
+        return json(200, { states: {} });
+      if (call.path === '/api/integrations/google/start') {
+        return json(503, { error: { code: 'unavailable', message: 'нет' } });
+      }
+      return null;
+    });
+    renderRoute('/solutions/b1');
+    const reason = await screen.findByText(
+      'Вы не дали доступ к Google Диску. Нажмите «Подключить снова» и отметьте доступ к файлам.',
+    );
+    expect(reason).toHaveAttribute('role', 'alert');
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить снова' }));
+    await waitFor(() =>
+      expect(calls.some((call) => call.path === '/api/integrations/google/start')).toBe(true),
+    );
+  });
+
+  /** Поддельный Google Picker: выбирает `pickedId` (null — закрыть окно), запоминает настройки. */
+  function fakePicker(pickedId: string | null) {
+    const seen: Record<string, string> = {};
+    class Builder {
+      private callback: (data: { action: string; docs?: Array<{ id: string }> }) => void = () => {};
+      addView() {
+        return this;
+      }
+      setOAuthToken(token: string) {
+        seen.token = token;
+        return this;
+      }
+      setDeveloperKey(key: string) {
+        seen.key = key;
+        return this;
+      }
+      setAppId(appId: string) {
+        seen.appId = appId;
+        return this;
+      }
+      setLocale(locale: string) {
+        seen.locale = locale;
+        return this;
+      }
+      setTitle(title: string) {
+        seen.title = title;
+        return this;
+      }
+      setCallback(callback: Builder['callback']) {
+        this.callback = callback;
+        return this;
+      }
+      build() {
+        return {
+          setVisible: () =>
+            queueMicrotask(() =>
+              this.callback(
+                pickedId ? { action: 'picked', docs: [{ id: pickedId }] } : { action: 'cancel' },
+              ),
+            ),
+        };
+      }
+    }
+    (window as unknown as { google: unknown }).google = {
+      picker: {
+        PickerBuilder: Builder,
+        DocsView: class {
+          setMode() {
+            return this;
+          }
+        },
+        ViewId: { SPREADSHEETS: 'spreadsheets' },
+        DocsViewMode: { LIST: 'list' },
+        Action: { PICKED: 'picked', CANCEL: 'cancel' },
+      },
+    };
+    return seen;
+  }
+
+  const OLD_URL = 'https://docs.google.com/spreadsheets/d/old-sheet-0123456789/edit';
+  const LOST = {
+    ...CONNECTED,
+    spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/new-sheet-0123456789/edit',
+    previousSheetUrl: OLD_URL,
+    picker: true,
+    pending: 0,
+  };
+
+  it('после переподключения прежняя таблица недоступна: сообщение, ссылка, выбор в Google Picker', async () => {
+    setProductSwitchesForTests({ googleSheets: true });
+    const seen = fakePicker('old-sheet-0123456789');
+    let status: Record<string, unknown> = LOST;
+    const calls = cabinet((call) => {
+      if (call.path.split('?')[0] === '/api/integrations/google') return json(200, status);
+      if (call.path.startsWith('/api/integrations/google/deliveries'))
+        return json(200, { states: {} });
+      if (call.path === '/api/integrations/google/picker-token') {
+        return json(200, {
+          accessToken: 'ya29.short',
+          apiKey: 'AIza-key',
+          appId: '123456789012',
+        });
+      }
+      if (call.path === '/api/integrations/google/pick-sheet') {
+        status = { ...CONNECTED, spreadsheetUrl: OLD_URL, previousSheetUrl: null, picker: true };
+        return json(200, status);
+      }
+      return null;
+    });
+    renderRoute('/solutions/b1');
+
+    const notice = await screen.findByTestId('google-previous-sheet');
+    expect(notice).toHaveTextContent('Прежняя таблица больше недоступна Ketner');
+    expect(notice).toHaveTextContent('Прежняя таблица осталась в вашем Google Диске');
+    expect(screen.getByRole('link', { name: 'Открыть прежнюю таблицу' })).toHaveAttribute(
+      'href',
+      OLD_URL,
+    );
+    // Основная ссылка — на новую таблицу, куда идут заявки.
+    expect(screen.getByRole('link', { name: 'Открыть таблицу' })).toHaveAttribute(
+      'href',
+      LOST.spreadsheetUrl,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Выбрать прежнюю таблицу' }));
+    expect(
+      await screen.findByText(
+        'Заявки снова пишутся в прежнюю таблицу. То, что успело записаться в новую, осталось в ней.',
+      ),
+    ).toBeVisible();
+    expect(seen).toMatchObject({
+      token: 'ya29.short',
+      key: 'AIza-key',
+      appId: '123456789012',
+      locale: 'ru',
+      title: 'Выберите таблицу «Заявки Ketner»',
+    });
+    expect(calls.find((call) => call.path.endsWith('/pick-sheet'))?.body).toEqual({
+      spreadsheetId: 'old-sheet-0123456789',
+    });
+    await waitFor(() => expect(screen.queryByTestId('google-previous-sheet')).toBeNull());
+    expect(screen.getByRole('link', { name: 'Открыть таблицу' })).toHaveAttribute('href', OLD_URL);
+  });
+
+  it('выбранный файл не подошёл — причина от сервера; окно закрыли — ничего не меняется; «Понятно»', async () => {
+    setProductSwitchesForTests({ googleSheets: true });
+    fakePicker(null);
+    let status: Record<string, unknown> = LOST;
+    const calls = cabinet((call) => {
+      if (call.path.split('?')[0] === '/api/integrations/google') return json(200, status);
+      if (call.path.startsWith('/api/integrations/google/deliveries'))
+        return json(200, { states: {} });
+      if (call.path === '/api/integrations/google/picker-token') {
+        return json(200, { accessToken: 'ya29.short', apiKey: 'AIza-key', appId: '1234567' });
+      }
+      if (call.path === '/api/integrations/google/pick-sheet') {
+        return json(422, {
+          error: {
+            code: 'sheet_wrong_header',
+            message: 'В этой таблице нет листа «Заявки» с колонками Ketner.',
+          },
+        });
+      }
+      if (call.path === '/api/integrations/google/previous-sheet/dismiss') {
+        status = { ...LOST, previousSheetUrl: null };
+        return json(200, status);
+      }
+      return null;
+    });
+    renderRoute('/solutions/b1');
+    await screen.findByTestId('google-previous-sheet');
+
+    // Окно закрыли без выбора: на сервер ничего не ушло.
+    fireEvent.click(screen.getByRole('button', { name: 'Выбрать прежнюю таблицу' }));
+    await waitFor(() =>
+      expect(calls.filter((call) => call.path.endsWith('/picker-token')).length).toBe(1),
+    );
+    expect(calls.some((call) => call.path.endsWith('/pick-sheet'))).toBe(false);
+
+    fakePicker('other-sheet-0123456789');
+    fireEvent.click(screen.getByRole('button', { name: 'Выбрать прежнюю таблицу' }));
+    expect(
+      await screen.findByText('В этой таблице нет листа «Заявки» с колонками Ketner.'),
+    ).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Понятно' }));
+    await waitFor(() => expect(screen.queryByTestId('google-previous-sheet')).toBeNull());
+    expect(calls.some((call) => call.path.endsWith('/previous-sheet/dismiss'))).toBe(true);
+  });
+
+  it('Picker не настроен — только ссылка на прежнюю таблицу; Google закрыл доступ — текст про доступ', async () => {
+    setProductSwitchesForTests({ googleSheets: true });
+    let status: Record<string, unknown> = { ...LOST, picker: false };
+    cabinet((call) => {
+      if (call.path.split('?')[0] === '/api/integrations/google') return json(200, status);
+      if (call.path.startsWith('/api/integrations/google/deliveries'))
+        return json(200, { states: {} });
+      return null;
+    });
+    const view = renderRoute('/solutions/b1');
+    await screen.findByTestId('google-previous-sheet');
+    expect(screen.queryByRole('button', { name: 'Выбрать прежнюю таблицу' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Открыть прежнюю таблицу' })).toBeVisible();
+    view.unmount();
+
+    status = {
+      ...CONNECTED,
+      status: 'sheet_missing',
+      lastErrorCode: 'not_found',
+      spreadsheetUrl: OLD_URL,
+      picker: true,
+    };
+    renderRoute('/solutions/b1');
+    expect(await screen.findByText(/Ketner больше не может открыть таблицу/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Выбрать прежнюю таблицу' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Создать новую таблицу' })).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Открыть прежнюю таблицу' })).toHaveAttribute(
+      'href',
+      OLD_URL,
+    );
   });
 });
 

@@ -8,6 +8,7 @@ import {
   readGoogleReturn,
   type GoogleSheetStatus,
 } from '@/features/google/api';
+import { pickSpreadsheet } from '@/features/google/picker';
 import { useTranslation } from '@/i18n';
 
 /**
@@ -25,16 +26,26 @@ export function GoogleSheetCard({
   /** Открыты ли Google Таблицы для аккаунта (сервер ответил не 503). */
   onAvailable: (available: boolean) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [status, setStatus] = useState<GoogleSheetStatus | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  // `reconnect` — рядом с сообщением кнопка «Подключить снова» (Google не выдал доступ к Диску).
+  const [message, setMessage] = useState<{
+    tone: 'ok' | 'error';
+    text: string;
+    reconnect?: boolean;
+  } | null>(null);
   const handledReturn = useRef(false);
   // Закрыто для аккаунта (503 feature_unavailable): карточки нет.
   const [closed, setClosed] = useState(false);
 
   const fail = useCallback(
     (error: unknown) => {
+      // На экране согласия Google сняли галочку «Google Диск»: сервер отказал и отозвал доступ.
+      if (error instanceof ApiError && error.code === 'google_missing_drive_file') {
+        setMessage({ tone: 'error', text: t('google.sheet.noDriveAccess'), reconnect: true });
+        return;
+      }
       setMessage({
         tone: 'error',
         text: error instanceof ApiError && error.message ? error.message : t('google.sheet.error'),
@@ -116,7 +127,42 @@ export function GoogleSheetCard({
     }
   };
 
+  // «Выбрать прежнюю таблицу»: окно Google Picker, выбранный файл проверяет сервер.
+  const pickPrevious = () =>
+    run(async () => {
+      const access = await googleSheetsApi.pickerToken();
+      let spreadsheetId: string | null;
+      try {
+        spreadsheetId = await pickSpreadsheet({
+          ...access,
+          locale: language,
+          title: t('google.sheet.pickTitle'),
+        });
+      } catch {
+        setMessage({ tone: 'error', text: t('google.sheet.pickFailed') });
+        return null;
+      }
+      if (!spreadsheetId) return null;
+      const next = await googleSheetsApi.pickSheet(spreadsheetId);
+      setMessage({ tone: 'ok', text: t('google.sheet.pickDone') });
+      return next;
+    });
+
+  const pickButton = (variant: 'primary' | 'secondary') =>
+    status?.picker ? (
+      <Button size="sm" variant={variant} disabled={busy} onClick={() => void pickPrevious()}>
+        {t('google.sheet.pickPrevious')}
+      </Button>
+    ) : null;
+
   const state = status?.status ?? null;
+  // Таблица, которую Ketner больше не может открыть: сохранённая при переподключении или текущая,
+  // если Google ответил «не найдено» (удалена навсегда или доступ закрыт).
+  const lostUrl =
+    status?.previousSheetUrl ??
+    (state === 'sheet_missing' && status?.lastErrorCode === 'not_found'
+      ? status.spreadsheetUrl
+      : null);
   const pending = status?.pending ?? 0;
   // Пока не известно, открыто ли, и для закрытых аккаунтов — ничего не показываем.
   if (closed || (status === null && !message && !busy)) return null;
@@ -137,6 +183,38 @@ export function GoogleSheetCard({
             {t('google.sheet.connect')}
           </Button>
         </>
+      ) : null}
+
+      {state === 'connected' && status?.previousSheetUrl ? (
+        <div
+          role="status"
+          className="mt-2 rounded-lg bg-warning-soft px-4 py-3"
+          data-testid="google-previous-sheet"
+        >
+          <p className="text-[14px] leading-6 text-text">{t('google.sheet.previousLost')}</p>
+          {status.picker ? (
+            <p className="mt-1 text-[13px] leading-5 text-muted">{t('google.sheet.pickHint')}</p>
+          ) : null}
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            {pickButton('primary')}
+            <a
+              href={status.previousSheetUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="text-[14px] font-medium text-accent underline-offset-4 hover:underline"
+            >
+              {t('google.sheet.openPrevious')}
+            </a>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => void run(() => googleSheetsApi.dismissPrevious())}
+            >
+              {t('google.sheet.dismissPrevious')}
+            </Button>
+          </div>
+        </div>
       ) : null}
 
       {state === 'connected' ? (
@@ -202,8 +280,23 @@ export function GoogleSheetCard({
 
       {state === 'sheet_missing' ? (
         <div role="alert" className="mt-2 rounded-lg bg-warning-soft px-4 py-3">
-          <p className="text-[14px] leading-6 text-text">{t('google.sheet.missing')}</p>
-          <div className="mt-2 flex flex-wrap gap-3">
+          <p className="text-[14px] leading-6 text-text">
+            {status?.lastErrorCode === 'not_found' || status?.previousSheetUrl
+              ? t('google.sheet.missingNoAccess')
+              : t('google.sheet.missing')}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            {pickButton('secondary')}
+            {lostUrl ? (
+              <a
+                href={lostUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="text-[14px] font-medium text-accent underline-offset-4 hover:underline"
+              >
+                {t('google.sheet.openPrevious')}
+              </a>
+            ) : null}
             <Button
               size="sm"
               disabled={busy}
@@ -254,6 +347,11 @@ export function GoogleSheetCard({
         >
           {message.text}
         </p>
+      ) : null}
+      {message?.reconnect && state !== 'reconnect_required' ? (
+        <Button className="mt-2" size="sm" disabled={busy} onClick={() => void connect()}>
+          {t('google.sheet.reconnect')}
+        </Button>
       ) : null}
     </div>
   );

@@ -70,6 +70,24 @@ export function googleOAuthSettings(): GoogleOAuthSettings | null {
   return { clientId, clientSecret, redirectUri };
 }
 
+/**
+ * Google Picker для кнопки «Выбрать прежнюю таблицу»: ключ API для браузера (в Google Cloud он
+ * ограничен адресом сайта и Picker API) и номер проекта (`appId`) — без номера `drive.file` не даст
+ * Ketner доступ к выбранному файлу. Не заданы — кнопки нет, остаётся ссылка на прежнюю таблицу.
+ */
+export interface GooglePickerConfig {
+  apiKey: string;
+  appId: string;
+}
+
+export function googlePickerConfig(): GooglePickerConfig | null {
+  const apiKey = process.env.GOOGLE_SHEETS_PICKER_API_KEY?.trim();
+  const appId = process.env.GOOGLE_SHEETS_APP_ID?.trim();
+  if (!apiKey || !/^[A-Za-z0-9_-]{20,100}$/.test(apiKey)) return null;
+  if (!appId || !/^[0-9]{6,20}$/.test(appId)) return null;
+  return { apiKey, appId };
+}
+
 // --- state ----------------------------------------------------------------------------------
 
 interface StatePayload {
@@ -187,7 +205,7 @@ const MESSAGES: Record<GoogleOAuthErrorCode, string> = {
   excess_scope:
     'Google выдал больше разрешений, чем нужно Ketner. Подключение отменено, доступ отозван. Попробуйте ещё раз.',
   missing_drive_file:
-    'Без разрешения на файлы Ketner не сможет записывать заявки в таблицу. Подключите ещё раз и оставьте это разрешение включённым.',
+    'Вы не дали доступ к Google Диску. Нажмите «Подключить снова» и отметьте доступ к файлам.',
   no_refresh_token: 'Google не выдал постоянный доступ. Попробуйте подключить ещё раз.',
   bad_id_token: 'Не удалось определить аккаунт Google. Попробуйте подключить ещё раз.',
   invalid_grant: 'Доступ к Google отозван. Подключите таблицу снова.',
