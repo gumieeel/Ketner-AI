@@ -145,7 +145,7 @@ describe('правовые страницы и контакты', () => {
     );
   });
 
-  it('политика: Google Таблицы — по запросу владельца, drive.file, действует с запуском возможности', () => {
+  it('политика: Google Таблицы — по запросу владельца, drive.file; пункт действует (шаг 5b)', () => {
     for (const language of ['ru', 'en'] as const) {
       const doc = getLegalDocument('privacy', language);
       const text = doc.sections
@@ -160,7 +160,13 @@ describe('правовые страницы и контакты', () => {
     const ru = getLegalDocument('privacy', 'ru')
       .sections.flatMap((section) => section.items ?? [])
       .join(' ');
-    expect(ru).toMatch(/Возможность появится позже: этот пункт начнёт действовать с её запуском/);
+    // Возможность открыта всем: оговорки «появится позже» в политике больше нет.
+    for (const language of ['ru', 'en'] as const) {
+      const all = getLegalDocument('privacy', language)
+        .sections.flatMap((section) => [...(section.paragraphs ?? []), ...(section.items ?? [])])
+        .join(' ');
+      expect(all).not.toMatch(/Возможность появится позже|This feature is coming later/);
+    }
     expect(ru).toMatch(/тариф \(или пакет кредитов — для покупок до 20 ноября 2026 г\.\)/);
   });
 

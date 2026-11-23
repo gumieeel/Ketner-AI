@@ -18,8 +18,9 @@ describe('закрытые возможности на сайте', () => {
   });
   afterEach(() => setSiteFeatures(null));
 
-  it('всё закрыто, вход ведёт к решениям', () => {
-    expect(Object.values(PRODUCT_SWITCHES).every((open) => !open)).toBe(true);
+  it('закрыто всё, кроме Google Таблиц (шаг 5b); вход ведёт к решениям', () => {
+    const open = Object.entries(PRODUCT_SWITCHES).filter(([, enabled]) => enabled);
+    expect(open).toEqual([['googleSheets', true]]);
     expect(productSwitch('chat')).toBe(false);
     expect(appHomePath()).toBe('/solutions');
   });
