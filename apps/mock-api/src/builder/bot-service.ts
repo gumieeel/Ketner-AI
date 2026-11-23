@@ -491,9 +491,11 @@ export class BotService {
     void this.deps.onLeadCreated?.(lead).catch((error: unknown) => {
       console.error(`[bot] заявка ${lead.id}: запись в таблицу не начата`, error);
     });
+    // Шаг «заявка → менеджер» — в фоне: заявка уже сохранена, посетитель не ждёт почту и Telegram
+    // (таймаут Telegram — до 15 с). Итог каждого канала — строка в логе (builder/lead-notify.ts).
     const owner = this.deps.owner(solution.ownerId);
     if (owner && this.deps.notifyLead) {
-      await this.deps.notifyLead(owner, solution, lead).catch((error: unknown) => {
+      void this.deps.notifyLead(owner, solution, lead).catch((error: unknown) => {
         console.error(`[bot] уведомление о заявке ${lead.id} не отправлено`, error);
       });
     }

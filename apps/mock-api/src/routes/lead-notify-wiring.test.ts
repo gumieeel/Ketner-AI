@@ -117,6 +117,15 @@ async function leaveLead(server: TestServer, slug: string) {
   assert.equal(response.status, 201);
 }
 
+/** Уведомления идут в фоне после ответа посетителю: ждём их (не дольше 2 с). */
+async function until(check: () => boolean) {
+  const deadline = Date.now() + 2000;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error('уведомление не пришло за 2 с');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
 const lines = (logs: string[]) =>
   logs.filter((line) => line.includes('[bot] уведомление о заявке'));
 
@@ -125,6 +134,7 @@ test('новый бот (оба канала): письмо и Telegram влад
   const owner = await signupOwner(server);
   const id = await publishedBot(owner, 'lisa-notify-a', { email: true, telegram: true });
   await leaveLead(server, 'lisa-notify-a');
+  await until(() => lines(logs).length === 2);
 
   const mail = mails.find((message) => message.subject.startsWith('Новая заявка'));
   assert.equal(mail?.to, owner.email);
@@ -138,16 +148,17 @@ test('новый бот (оба канала): письмо и Telegram влад
 });
 
 test('бот до шага: письмо как раньше, Telegram не приходит', async (t) => {
-  const { server, mails, telegram } = await setup(t);
+  const { server, mails, telegram, logs } = await setup(t);
   const owner = await signupOwner(server);
   await publishedBot(owner, 'lisa-notify-b');
   await leaveLead(server, 'lisa-notify-b');
+  await until(() => lines(logs).length === 2);
   assert.equal(mails.filter((message) => message.subject.startsWith('Новая заявка')).length, 1);
   assert.equal(telegram.sent.length, 0);
 });
 
 test('кабинет: переключатели сохраняются и действуют; Telegram не привязан — видно в обзоре', async (t) => {
-  const { server, mails, telegram } = await setup(t, false);
+  const { server, mails, telegram, logs } = await setup(t, false);
   const owner = await signupOwner(server);
   const id = await publishedBot(owner, 'lisa-notify-c');
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${owner.token}` };
@@ -181,6 +192,7 @@ test('кабинет: переключатели сохраняются и де�
   assert.equal(bad.status, 400);
 
   await leaveLead(server, 'lisa-notify-c');
+  await until(() => lines(logs).length === 2);
   assert.equal(mails.filter((message) => message.subject.startsWith('Новая заявка')).length, 0);
   // Telegram включён, но не привязан — не отправлено (причина в логе), заявка сохранена.
   assert.equal(telegram.sent.length, 0);

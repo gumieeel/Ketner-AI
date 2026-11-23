@@ -69,6 +69,7 @@ async function setup(
     tierUsage?: TierUsage;
     tierAlerts?: TierAlerts;
     onLeadCreated?: (lead: BotLead) => Promise<void>;
+    notifyLead?: (lead: BotLead) => Promise<unknown>;
   } = {},
 ) {
   const store = new MemoryBuilderStore();
@@ -113,6 +114,7 @@ async function setup(
       : {}),
     notifyLead: async (_owner, _solution, lead) => {
       leads.push(lead);
+      await options.notifyLead?.(lead);
     },
     now: () => NOW,
   });
@@ -374,6 +376,52 @@ test('заявка уходит в запись Google Таблицы (этап 
     assert.equal(failing.leads.length, 1, 'письмо о заявке ушло');
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(errors.length, 1);
+  } finally {
+    console.error = originalError;
+  }
+});
+
+test('заявка: ответ посетителю не ждёт уведомлений (зависший Telegram не задерживает); сбой — в лог', async () => {
+  // Уведомление, которое не завершается никогда (как Telegram, не отвечающий до таймаута).
+  let release!: () => void;
+  const hanging = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const { service, leads, store } = await setup({ notifyLead: () => hanging });
+  const started = Date.now();
+  const result = await Promise.race([
+    service.createLead('lisa-shop', {
+      visitorId: VISITOR,
+      name: 'Анна',
+      contact: '+7 700 000 00 00',
+      question: 'Букет',
+    }),
+    new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 1000)),
+  ]);
+  assert.notEqual(result, 'timeout', 'ответ посетителю не ждёт уведомление');
+  assert.ok(Date.now() - started < 1000);
+  assert.equal(result !== 'timeout' && result.ok, true);
+  // Заявка сохранена до ответа, уведомление начато.
+  assert.equal((await store.listLeads(OWNER.userId, 'bot-1', 10)).length, 1);
+  assert.equal(leads.length, 1);
+  release();
+
+  // Сбой уведомления — строка в логе, ответ уже ушёл.
+  const errors: unknown[] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => errors.push(args);
+  try {
+    const failing = await setup({ notifyLead: () => Promise.reject(new Error('SMTP')) });
+    const lead = await failing.service.createLead('lisa-shop', {
+      visitorId: VISITOR,
+      name: 'Борис',
+      contact: 'boris@example.com',
+      question: '',
+    });
+    assert.equal(lead.ok, true);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(errors.length, 1);
+    assert.match(String((errors[0] as unknown[])[0]), /уведомление о заявке .* не отправлено/);
   } finally {
     console.error = originalError;
   }

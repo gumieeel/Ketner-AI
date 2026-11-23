@@ -2278,7 +2278,7 @@ export const en: Record<TranslationKey, string> = {
     'Telegram is not linked to your account, so messages will not arrive there.',
   'builder.bot.notify.link': 'Link it in settings',
   'builder.bot.leads.empty':
-    'No requests yet. When the bot does not know an answer or a customer wants to order, it offers to leave a contact — the request comes here and to your email.',
+    'No requests yet. When the bot does not know an answer or a customer wants to order, it offers to leave a contact — the request comes here, to your email and to Telegram (if linked), as set in “New request notifications”.',
   'builder.bot.leads.markDone': 'Mark as handled',
   'builder.bot.leads.markNew': 'Mark as new',
   'builder.bot.leads.new': 'New',
