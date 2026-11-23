@@ -31,20 +31,18 @@ export const ANSWER_REVIEW_ENABLED = false;
 /** Сравнение ответов моделей (`/api/chat/compare`). */
 export const MODEL_COMPARE_ENABLED = false;
 /**
- * Запись заявок в Google Таблицу владельца (этап F, docs/STAGE_F_SHEETS.md). Выключено до проверки
- * на настоящем аккаунте Google; кроме переключателя нужны GOOGLE_SHEETS_CLIENT_ID / _SECRET.
+ * Запись заявок в Google Таблицу владельца (этап F, docs/STAGE_F_SHEETS.md). Открыто для всех после
+ * пилота 22–23.11.2026 (шаг 5b); кроме переключателя нужны GOOGLE_SHEETS_CLIENT_ID / _SECRET — без
+ * них адреса отвечают 503, карточки нет.
  */
-export const GOOGLE_SHEETS_ENABLED = false;
+export const GOOGLE_SHEETS_ENABLED = true;
 /**
  * Пилот Google Таблиц (этап F, шаг 5a): аккаунты, для которых запись заявок работает при
- * выключенном `GOOGLE_SHEETS_ENABLED` — проверка на настоящем аккаунте Google. Остальные получают
- * 503 и не видят карточку: сайт решает по ответу `GET /api/integrations/google`, поэтому список
- * живёт только на сервере и в код сайта (открытый) не попадает.
+ * выключенном `GOOGLE_SHEETS_ENABLED`. После шага 5b список пуст: открыто всем. Путь «по аккаунту»
+ * (`googleSheetsEnabledFor`) остаётся — если переключатель снова закроют, пилот можно вернуть
+ * списком здесь. Список живёт только на сервере: сайт решает по ответу `GET /api/integrations/google`.
  */
-export const GOOGLE_SHEETS_PILOT_ACCOUNTS: readonly string[] = [
-  // Владелец
-  'c4b78d88-6aee-4183-bd19-33a40e9ffece',
-];
+export const GOOGLE_SHEETS_PILOT_ACCOUNTS: readonly string[] = [];
 
 export const PRODUCT_SWITCHES = {
   stars: STARS_ENABLED,

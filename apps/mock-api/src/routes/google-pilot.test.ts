@@ -7,28 +7,51 @@ import {
   googleSheetsEnabledForAnyone,
   productSwitch,
   setGoogleSheetsPilotForTests,
+  setProductSwitchForTests,
 } from '../product-switches.js';
 import { FAKE_GOOGLE_SETTINGS, createFakeGoogle } from '../testing/fake-google.js';
 import { readJson, startTestServer, type TestServer } from '../testing/server.js';
 import { signupAndVerify } from '../testing/signup.js';
 import type { AuthSession } from '../types.js';
 
-// Пилот (этап F, шаг 5a): переключатель выключен, Google Таблицы — только аккаунтам из списка.
+// Шаг 5b: Google Таблицы открыты всем, список пилота пуст. Путь «по аккаунту» остаётся: если
+// переключатель снова закроют, пилот возвращается списком на сервере.
 
-test('пилот в коде: только владелец, список только на сервере; переключатель для всех закрыт', () => {
-  assert.equal(productSwitch('googleSheets'), false);
-  assert.deepEqual(GOOGLE_SHEETS_PILOT_ACCOUNTS, ['c4b78d88-6aee-4183-bd19-33a40e9ffece']);
-  assert.equal(googleSheetsEnabledFor('c4b78d88-6aee-4183-bd19-33a40e9ffece'), true);
-  assert.equal(googleSheetsEnabledFor('someone-else'), false);
-  assert.equal(googleSheetsEnabledFor(null), false);
+test('шаг 5b: открыто всем аккаунтам, список пилота пуст и в код сайта не попадает', () => {
+  assert.equal(productSwitch('googleSheets'), true);
+  assert.deepEqual(GOOGLE_SHEETS_PILOT_ACCOUNTS, []);
+  assert.equal(googleSheetsEnabledFor('any-account'), true);
   assert.equal(googleSheetsEnabledForAnyone(), true);
+  // Прежний id владельца из пилота больше нигде в коде переключателей нет.
+  for (const file of ['../product-switches.ts', '../../../web/src/lib/product-switches.ts']) {
+    assert.ok(!readFileSync(new URL(file, import.meta.url), 'utf8').includes('c4b78d88'), file);
+  }
+});
 
-  // Список — только на сервере: в открытый код сайта id аккаунтов не попадают.
-  const web = readFileSync(
-    new URL('../../../web/src/lib/product-switches.ts', import.meta.url),
-    'utf8',
+test('открыто всем: любой вошедший аккаунт получает статус; гость — 401, а не 503', async (t) => {
+  const server = await startTestServer({}, { googleSettings: () => FAKE_GOOGLE_SETTINGS });
+  t.after(() => server.close());
+  const owner = await signup(server, 'anyone');
+  const status = await fetch(`${server.baseUrl}/api/integrations/google`, {
+    headers: { Authorization: `Bearer ${owner.token}` },
+  });
+  assert.equal(status.status, 200);
+  assert.equal((await readJson<{ connected: boolean }>(status)).connected, false);
+  assert.equal((await fetch(`${server.baseUrl}/api/integrations/google`)).status, 401);
+});
+
+test('без клиента Google (нет GOOGLE_SHEETS_CLIENT_ID / _SECRET) — по-прежнему 503 и нет карточки', async (t) => {
+  const server = await startTestServer({}, { googleSettings: () => null });
+  t.after(() => server.close());
+  const owner = await signup(server, 'no-client');
+  const response = await fetch(`${server.baseUrl}/api/integrations/google`, {
+    headers: { Authorization: `Bearer ${owner.token}` },
+  });
+  assert.equal(response.status, 503);
+  assert.equal(
+    (await readJson<{ error: { code: string } }>(response)).error.code,
+    'feature_unavailable',
   );
-  assert.ok(!web.includes('c4b78d88'));
 });
 
 async function signup(server: TestServer, name: string): Promise<AuthSession> {
@@ -45,7 +68,8 @@ async function signup(server: TestServer, name: string): Promise<AuthSession> {
   );
 }
 
-test('пилот: аккаунт из списка подключает Google, остальные получают 503 — и на колбэке тоже', async (t) => {
+test('путь по аккаунту сохранён: переключатель закрыт — только аккаунты из списка, 503 и на колбэке', async (t) => {
+  setProductSwitchForTests('googleSheets', false);
   const google = createFakeGoogle();
   const originalLog = console.log;
   console.log = () => {};
@@ -56,6 +80,7 @@ test('пилот: аккаунт из списка подключает Google, 
   t.after(async () => {
     console.log = originalLog;
     setGoogleSheetsPilotForTests(null);
+    setProductSwitchForTests('googleSheets', true);
     await server.close();
   });
   const pilot = await signup(server, 'pilot');

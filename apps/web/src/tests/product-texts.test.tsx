@@ -67,11 +67,20 @@ describe('тексты о продукте', () => {
     expect(article.textContent).not.toMatch(/без подписки|в одном чате|звёзд|⭐|кредит/i);
   });
 
-  it('«Что нового»: последняя запись — тарифы вместо кредитов, условия возврата за пакеты сохранены', () => {
+  it('«Что нового»: последняя запись — заявки в Google Таблицу (шаг 5b)', () => {
     const [latest] = RELEASES;
-    expect(latest?.date).toBe('2026-11-20');
-    expect(latest?.title).toBe('Тарифы вместо кредитов');
+    expect(latest?.date).toBe('2026-11-23');
+    expect(latest?.title).toBe('Заявки — в вашу Google Таблицу');
     const text = latest!.items.map((item) => item.text).join(' ');
+    expect(text).toMatch(/«Записывать заявки в Google Таблицу»/);
+    expect(text).toMatch(/Дописать пропущенные/);
+    expect(text).toMatch(/Resend/);
+  });
+
+  it('«Что нового»: тарифы вместо кредитов, условия возврата за пакеты сохранены', () => {
+    const release = RELEASES.find((item) => item.date === '2026-11-20');
+    expect(release?.title).toBe('Тарифы вместо кредитов');
+    const text = release!.items.map((item) => item.text).join(' ');
     expect(text).toMatch(/Пакеты кредитов больше не продаются/);
     expect(text).toMatch(/автоматических списаний нет/);
     expect(text).toMatch(/в течение 14 дней, пока из пакета ничего не потрачено/);
