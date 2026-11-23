@@ -11,7 +11,7 @@ import { readJson, startTestServer, type ApiErrorBody } from './testing/server.j
 import { signupAndVerify } from './testing/signup.js';
 import type { AuthSession } from './types.js';
 
-test('решения владельца: звёзды, пакеты кредитов, чат, Code, картинки, API, проверка, сравнение и Google Таблицы закрыты', () => {
+test('решения владельца: звёзды, пакеты кредитов, чат, Code, картинки, API, проверка и сравнение закрыты; Google Таблицы открыты (шаг 5b)', () => {
   assert.deepEqual(PRODUCT_SWITCHES, {
     stars: false,
     packs: false,
@@ -21,7 +21,7 @@ test('решения владельца: звёзды, пакеты кредит
     developerApi: false,
     answerReview: false,
     modelCompare: false,
-    googleSheets: false,
+    googleSheets: true,
   });
 });
 
@@ -74,11 +74,6 @@ const CLOSED: ReadonlyArray<readonly [string, string, ProductFeature]> = [
   ['POST', '/api/billing/telegram-stars/create-invoice', 'stars'],
   ['POST', '/api/telegram/miniapp/invoice', 'stars'],
   ['POST', '/api/billing/crypto/create-invoice', 'packs'],
-  ['GET', '/api/integrations/google', 'googleSheets'],
-  ['POST', '/api/integrations/google/start', 'googleSheets'],
-  ['GET', '/api/integrations/google/callback?code=x&state=y', 'googleSheets'],
-  ['POST', '/api/integrations/google/confirm', 'googleSheets'],
-  ['DELETE', '/api/integrations/google/connection', 'googleSheets'],
   ['POST', '/api/billing/checkout', 'packs'],
   ['GET', '/api/packs', 'packs'],
 ];

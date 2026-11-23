@@ -21,8 +21,8 @@ export const DEVELOPER_API_ENABLED = false;
 export const ANSWER_REVIEW_ENABLED = false;
 /** Сравнение ответов моделей. */
 export const MODEL_COMPARE_ENABLED = false;
-/** Запись заявок в Google Таблицу (этап F): выключено до проверки на настоящем аккаунте Google. */
-export const GOOGLE_SHEETS_ENABLED = false;
+/** Запись заявок в Google Таблицу (этап F): открыто для всех после пилота (шаг 5b, 23.11.2026). */
+export const GOOGLE_SHEETS_ENABLED = true;
 
 export const PRODUCT_SWITCHES = {
   stars: STARS_ENABLED,
