@@ -285,7 +285,25 @@ describe('кабинет бота: ссылка, код для сайта, за�
     );
   });
 
-  it('схема «Как работает бот»: SVG с описанием, текстом и списком; после сохранения — заново', async () => {
+  /** Ширина контейнера схемы: ResizeObserver сообщает её сразу при наблюдении. */
+  function containerWidth(px: number) {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(private readonly callback: ResizeObserverCallback) {}
+        observe() {
+          this.callback(
+            [{ contentRect: { width: px } } as ResizeObserverEntry],
+            this as unknown as ResizeObserver,
+          );
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+  }
+
+  function diagramPage() {
     const details = botDetails();
     let overview: BotOverview = {
       ...botOverview(),
@@ -295,7 +313,13 @@ describe('кабинет бота: ссылка, код для сайта, за�
     const diagram: BotDiagram = {
       nodes: [
         { id: 'trigger', kind: 'trigger', label: 'Посетитель пишет боту', level: 0, row: 0 },
-        { id: 'agent:bot', kind: 'agent', label: 'Бот «Лиса»', level: 1, row: 0 },
+        {
+          id: 'agent:bot',
+          kind: 'agent',
+          label: 'Бот «Ketner AI — ассистент поддержки»',
+          level: 1,
+          row: 0,
+        },
         { id: 'event:lead.created', kind: 'event', label: 'Новая заявка', level: 2, row: 0 },
         {
           id: 'step:lead_to_sheet:step-1',
@@ -332,7 +356,10 @@ describe('кабинет бота: ссылка, код для сайта, за�
         { from: 'event:lead.created', to: 'step:lead_to_manager:step-1' },
         { from: 'step:lead_to_sheet:step-1', to: 'service:spreadsheets_sync' },
       ],
-      description: ['Посетитель пишет боту → Бот «Лиса»', 'Бот «Лиса» → Новая заявка'],
+      description: [
+        'Посетитель пишет боту → Бот «Ketner AI — ассистент поддержки»',
+        'Бот «Ketner AI — ассистент поддержки» → Новая заявка',
+      ],
     };
     const calls = stubFetch((call) => {
       const path = call.path.replace(/^\/api\/solutions/, '');
@@ -348,10 +375,52 @@ describe('кабинет бота: ссылка, код для сайта, за�
       return json(404, { error: { code: 'not_found', message: '' } });
     });
     renderRoute('/solutions/b1');
+    return { calls, diagram };
+  }
+
+  it('схема в колонке кабинета (650 px): список сверху вниз, все узлы видны, SVG нет', async () => {
+    containerWidth(650);
+    const { calls, diagram } = diagramPage();
 
     const section = await screen.findByTestId('process-diagram');
     expect(screen.getByRole('heading', { name: 'Как работает бот' })).toBeVisible();
+    expect(section).toHaveAttribute('data-view', 'list');
+    expect(within(section).queryByRole('img')).toBeNull();
+    expect(section.querySelector('.overflow-x-auto')).toBeNull();
+    const list = within(section).getByRole('list', { name: 'Схема работы бота' });
+    expect(list.querySelectorAll('[data-chain]')).toHaveLength(diagram.nodes.length);
+    for (const node of diagram.nodes) {
+      expect(within(list).getByText(node.label)).toBeVisible();
+    }
+    // Имя бота целиком; таблица — в ветке «Строка в таблицу», а не после уведомления.
+    expect(within(list).getByText('Бот «Ketner AI — ассистент поддержки»')).toBeVisible();
+    const branch = list.querySelector('[data-chain="step:lead_to_sheet:step-1"]') as HTMLElement;
+    expect(branch.querySelector('[data-chain="service:spreadsheets_sync"]')).not.toBeNull();
+    const notice = list.querySelector('[data-chain="step:lead_to_manager:step-1"]') as HTMLElement;
+    expect(notice.querySelector('[data-chain="service:spreadsheets_sync"]')).toBeNull();
+    expect(within(list).getByText('пауза: тариф не активен')).toBeVisible();
+
+    // Сохранили переключатель — схема запрашивается снова.
+    const before = calls.filter((call) => call.path.endsWith('/b1/bot/diagram')).length;
+    const card = await screen.findByTestId('lead-notify-card');
+    fireEvent.click(within(card).getByRole('checkbox', { name: 'По почте' }));
+    await waitFor(() =>
+      expect(calls.filter((call) => call.path.endsWith('/b1/bot/diagram')).length).toBe(before + 1),
+    );
+  });
+
+  it('схема шириной 1100 px: SVG целиком в масштабе 1, описание текстом — вне рисунка', async () => {
+    containerWidth(1100);
+    diagramPage();
+
+    const section = await screen.findByTestId('process-diagram');
+    await waitFor(() => expect(section).toHaveAttribute('data-view', 'diagram'));
     const svg = within(section).getByRole('img', { name: 'Схема работы бота' });
+    expect(Number(svg.getAttribute('width'))).toBeLessThanOrEqual(1100);
+    expect(svg.getAttribute('viewBox')).toBe(
+      `0 0 ${svg.getAttribute('width')} ${svg.getAttribute('height')}`,
+    );
+    expect(within(section).queryByRole('list', { name: 'Схема работы бота' })).toBeNull();
     // Шесть узлов и пять связей; второй строкой — состояние или риск.
     expect(svg.querySelectorAll('[data-node]')).toHaveLength(6);
     expect(svg.querySelectorAll('path[marker-end]')).toHaveLength(5);
@@ -361,24 +430,15 @@ describe('кабинет бота: ссылка, код для сайта, за�
     expect(svg.querySelector('[data-node="step:lead_to_sheet:step-1"]')?.textContent).toMatch(
       /риск низкий/,
     );
-    // Описание — то же текстом, на него ссылается схема.
+    // Длинное имя бота — в две строки, полностью — в подсказке.
+    const bot = svg.querySelector('[data-node="agent:bot"]')!;
+    expect(bot.querySelectorAll('text:first-of-type tspan')).toHaveLength(2);
+    expect(bot.querySelector('title')?.textContent).toBe('Бот «Ketner AI — ассистент поддержки»');
+    // Описание — то же текстом, на него ссылается схема; оно не внутри прокрутки и не внутри SVG.
     const description = document.getElementById(svg.getAttribute('aria-describedby')!)!;
-    expect(description.textContent).toMatch(/Посетитель пишет боту → Бот «Лиса»/);
-    // Телефон: те же узлы по связям; таблица — в ветке «Строка в таблицу», а не после уведомления.
-    const list = within(section).getByRole('list', { name: 'Схема работы бота' });
-    const branch = list.querySelector('[data-chain="step:lead_to_sheet:step-1"]') as HTMLElement;
-    expect(branch.querySelector('[data-chain="service:spreadsheets_sync"]')).not.toBeNull();
-    const notice = list.querySelector('[data-chain="step:lead_to_manager:step-1"]') as HTMLElement;
-    expect(notice.querySelector('[data-chain="service:spreadsheets_sync"]')).toBeNull();
-    expect(list.querySelectorAll('[data-chain]')).toHaveLength(6);
-
-    // Сохранили переключатель — схема запрашивается снова.
-    const before = calls.filter((call) => call.path.endsWith('/b1/bot/diagram')).length;
-    const card = await screen.findByTestId('lead-notify-card');
-    fireEvent.click(within(card).getByRole('checkbox', { name: 'По почте' }));
-    await waitFor(() =>
-      expect(calls.filter((call) => call.path.endsWith('/b1/bot/diagram')).length).toBe(before + 1),
-    );
+    expect(description.textContent).toMatch(/Посетитель пишет боту → Бот «Ketner AI/);
+    expect(svg.contains(description)).toBe(false);
+    expect(section.querySelector('.overflow-x-auto')).toBeNull();
   });
 
   it('схема недоступна (старый сервер) — раздела нет, остальная страница работает', async () => {
