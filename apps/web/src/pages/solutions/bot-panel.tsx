@@ -70,11 +70,11 @@ export function BotPanel({ details }: { details: SolutionDetails }) {
     <>
       <ShareSection details={details} overview={overview} onRefresh={refresh} />
       <PreviewSection id={id} />
-      <LeadsSection id={id} />
+      <LeadsSection id={id} overview={overview} onSave={save} />
       <ConversationsSection id={id} overview={overview} onSave={save} />
       {/* Настройки пересобираются после любого сохранения (и исправления из диалога). */}
       <SettingsSection
-        key={JSON.stringify(overview.settings)}
+        key={settingsKey(overview.settings)}
         solutionId={id}
         overview={overview}
         saved={settingsSaved}
@@ -86,6 +86,14 @@ export function BotPanel({ details }: { details: SolutionDetails }) {
       />
     </>
   );
+}
+
+/**
+ * Ключ формы настроек: пересобрать её после сохранения настроек, но не после переключателей
+ * уведомлений о заявках — они сохраняются сразу и не сбрасывают несохранённые правки формы.
+ */
+function settingsKey({ leadNotify: _ignored, ...rest }: BotSettings): string {
+  return JSON.stringify(rest);
 }
 
 function Section({ title, lead, children }: { title: string; lead?: string; children: ReactNode }) {
@@ -336,7 +344,15 @@ function PreviewSection({ id }: { id: string }) {
 
 // ─── Заявки ──────────────────────────────────────────────────────────────────
 
-function LeadsSection({ id }: { id: string }) {
+function LeadsSection({
+  id,
+  overview,
+  onSave,
+}: {
+  id: string;
+  overview: BotOverview;
+  onSave: (patch: Partial<BotSettings>) => Promise<void>;
+}) {
   const { t, language } = useTranslation();
   const [leads, setLeads] = useState<BotLeadView[] | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -375,6 +391,7 @@ function LeadsSection({ id }: { id: string }) {
 
   return (
     <Section title={t('builder.bot.leads.title')}>
+      <LeadNotifyCard id={id} overview={overview} onSave={onSave} />
       <GoogleSheetCard onChange={loadDeliveries} onAvailable={setSheets} />
       {error ? (
         <div className="mt-4">
@@ -657,6 +674,82 @@ function ConversationMessage({
   );
 }
 
+// ─── Шаг «заявка → менеджер» ─────────────────────────────────────────────────
+
+/**
+ * Уведомления о новых заявках (шаг автоматизации «заявка → менеджер»): письмо и Telegram (бот
+ * Ketner). Переключатель сохраняется сразу; у новых ботов оба включены.
+ */
+function LeadNotifyCard({
+  id,
+  overview,
+  onSave,
+}: {
+  id: string;
+  overview: BotOverview;
+  onSave: (patch: Partial<BotSettings>) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const current = overview.settings.leadNotify;
+  // Старый сервер не знает шага — карточки нет.
+  if (!current) return null;
+  const telegramLinked = overview.leadNotify?.telegramLinked ?? false;
+
+  const set = async (channel: 'email' | 'telegram', value: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onSave({ leadNotify: { ...current, [channel]: value } });
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <fieldset
+      className="mt-4 rounded-xl border border-stroke px-5 py-4"
+      data-testid="lead-notify-card"
+      disabled={busy}
+    >
+      <legend className="sr-only">{t('builder.bot.notify.title')}</legend>
+      <p className="text-[15px] font-medium text-text" aria-hidden="true">
+        {t('builder.bot.notify.title')}
+      </p>
+      <p className="mt-1 text-[14px] leading-6 text-muted">{t('builder.bot.notify.lead')}</p>
+      <div className="mt-3 flex flex-col gap-2">
+        {(['email', 'telegram'] as const).map((channel) => (
+          <label key={channel} className="flex min-h-9 items-center gap-3 text-[15px] text-text">
+            <input
+              type="checkbox"
+              className="size-4 accent-[var(--accent)]"
+              checked={current[channel]}
+              onChange={(event) => void set(channel, event.target.checked)}
+            />
+            {t(channel === 'email' ? 'builder.bot.notify.email' : 'builder.bot.notify.telegram')}
+          </label>
+        ))}
+      </div>
+      {current.telegram && !telegramLinked ? (
+        <p className="mt-2 text-[13px] leading-5 text-subtle">
+          {t('builder.bot.notify.telegramNotLinked')}{' '}
+          <Link to="/settings" className="text-accent underline-offset-4 hover:underline">
+            {t('builder.bot.notify.link')}
+          </Link>
+        </p>
+      ) : null}
+      {error ? (
+        <div className="mt-3">
+          <ErrorNotice error={error} redirect={`/solutions/${id}`} />
+        </div>
+      ) : null}
+    </fieldset>
+  );
+}
+
 // ─── Настройки страницы ──────────────────────────────────────────────────────
 
 function SettingsSection({
@@ -688,8 +781,10 @@ function SettingsSection({
     setBusy(true);
     setError(null);
     try {
+      // Уведомления о заявках сохраняются своими переключателями — форма их не трогает.
+      const { leadNotify: _own, ...rest } = settings;
       await onSave({
-        ...settings,
+        ...rest,
         slug: settings.slug.trim().toLowerCase(),
         quickReplies: settings.quickReplies.map((item) => item.trim()).filter(Boolean),
         corrections: settings.corrections.filter(

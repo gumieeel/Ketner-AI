@@ -160,6 +160,7 @@ export const botSettingsBodySchema = z
         }),
       )
       .max(30),
+    leadNotify: z.object({ email: z.boolean(), telegram: z.boolean() }).strict(),
   })
   .partial();
 
