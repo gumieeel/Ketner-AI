@@ -159,12 +159,24 @@ test('тариф — из services/tiers.ts: по обращениям и вне
   const unknownVolume = deliveryOf(priced(bot), { catalogPositions: null, monthlyRequests: null });
   assert.equal(unknownVolume.tier?.id, 'start');
   assert.equal(unknownVolume.volumeKnown, false);
-  // Внешний сервис — не меньше Growth (в Start внешних сервисов нет).
+  // Один внешний сервис — Start (с 23.11.2026 в Start 1 сервис); два — Growth.
   const sheets = deliveryOf(priced(['ai_message_processing', 'google_sheets_integration']), {
     catalogPositions: null,
     monthlyRequests: 100,
   });
-  assert.equal(sheets.tier?.id, 'growth');
+  assert.equal(sheets.tier?.id, 'start');
+  const twoServices = deliveryOf(
+    priced(['ai_message_processing', 'google_sheets_integration', 'crm_integration']),
+    { catalogPositions: null, monthlyRequests: 100 },
+  );
+  assert.equal(twoServices.tier?.id, 'growth');
+  // Каналы — не внешние сервисы: бот в Telegram вместе с таблицей остаётся на Start.
+  const channels = deliveryOf(
+    priced(['ai_message_processing', 'telegram_integration', 'google_sheets_integration']),
+    { catalogPositions: null, monthlyRequests: 100 },
+  );
+  assert.equal(channels.kind, 'team');
+  assert.equal(channels.tier?.id, 'start');
   // Больше Scale — индивидуальные условия.
   assert.equal(
     deliveryOf(priced(bot), { catalogPositions: null, monthlyRequests: 1_000_000 }).tier,

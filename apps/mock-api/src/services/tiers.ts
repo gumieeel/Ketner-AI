@@ -34,7 +34,7 @@ export const TIERS: readonly Tier[] = [
     priceUsd: 10,
     activeSolutions: 1,
     monthlyRequests: 1_000,
-    externalServices: 0,
+    externalServices: 1,
     integrationHelp: { kind: 'widget_install' },
     buildAllowanceCredits: 2_000,
   },

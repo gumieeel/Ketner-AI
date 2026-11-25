@@ -7,6 +7,10 @@ import { FAKE_GOOGLE_SETTINGS, createFakeGoogle } from '../testing/fake-google.j
 import { readJson, startTestServer, type TestServer } from '../testing/server.js';
 import { signupAndVerify } from '../testing/signup.js';
 import type { AuthSession } from '../types.js';
+import { setTierEnforcedForTests } from '../billing/tier-usage.js';
+
+// Правила тарифа для внешних сервисов — в routes/google-tier.test.ts; здесь — поведение Google.
+setTierEnforcedForTests(false);
 
 /**
  * Уведомление владельцу о поломке Google Таблицы — по тому же пути, что в production: доставку

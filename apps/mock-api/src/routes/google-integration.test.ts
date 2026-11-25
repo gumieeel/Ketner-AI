@@ -7,6 +7,10 @@ import { signupAndVerify } from '../testing/signup.js';
 import { DRIVE_FILE, FAKE_GOOGLE_SETTINGS, createFakeGoogle } from '../testing/fake-google.js';
 import { LEAD_SHEET_COLUMNS } from '../google/sheets.js';
 import type { AuthSession } from '../types.js';
+import { setTierEnforcedForTests } from '../billing/tier-usage.js';
+
+// Правила тарифа для внешних сервисов — в routes/google-tier.test.ts; здесь — поведение Google.
+setTierEnforcedForTests(false);
 
 setProductSwitchForTests('googleSheets', true);
 
@@ -114,6 +118,7 @@ test('подключение: start → callback → confirm; verifier толь�
     connectedAt: null,
     previousSheetUrl: null,
     picker: false,
+    tier: null,
     pending: 0,
   });
 

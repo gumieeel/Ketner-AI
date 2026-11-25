@@ -12,6 +12,8 @@ import { SheetsDelivery } from './delivery.js';
 import type { GoogleOAuthSettings } from './oauth.js';
 
 export interface SheetsDeliveryRuntimeDeps {
+  /** Активен ли тариф аккаунта: нет — запись в таблицу ждёт (раздел «Тариф» в delivery.ts). */
+  tierActive?: (userId: string) => boolean;
   stores: () => DiscoveryStores | null;
   connections: GoogleConnectionStore;
   settings: () => GoogleOAuthSettings | null;
@@ -153,6 +155,7 @@ export function createSheetsDelivery(deps: SheetsDeliveryRuntimeDeps): SheetsDel
     enabled: (userId) =>
       userId === undefined ? googleSheetsEnabledForAnyone() : googleSheetsEnabledFor(userId),
     siteUrl: deps.siteUrl,
+    ...(deps.tierActive ? { tierActive: deps.tierActive } : {}),
     ...(deps.timeZoneOf ? { timeZoneOf: deps.timeZoneOf } : {}),
     ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
     ...(deps.now ? { now: deps.now } : {}),

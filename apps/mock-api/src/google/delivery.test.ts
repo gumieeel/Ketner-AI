@@ -69,6 +69,7 @@ async function harness(
       typeof options.enabled === 'function' ? options.enabled(userId) : (options.enabled ?? true),
     siteUrl: () => 'https://ketner.org',
     timeZoneOf: () => options.timeZone ?? null,
+    ...(options.tier ? { tierActive: () => options.tier!.active } : {}),
     notifyBroken: async (userId, status) => {
       notified.push([userId, status]);
     },
@@ -458,4 +459,33 @@ test('дата в строке — в часовом поясе владельц
   await h.lead('lead-tz', { createdAt: '2026-11-22T06:35:10.000Z' });
   const row = (h.google.appendRequests[0]!.body as { values: string[][] }).values[0]!;
   assert.equal(row[0], '2026-11-22 11:35');
+});
+
+test('тариф снят: запись ждёт (tier_inactive), Google не трогаем, обход не повторяет; продлили — дописывается', async () => {
+  const tier = { active: true };
+  const h = await harness({ tier });
+  await h.lead('lead-1');
+  assert.equal(h.google.rows.get(SHEET)?.length, 1);
+
+  tier.active = false;
+  const drive = h.google.driveRequests;
+  await h.lead('lead-2');
+  assert.deepEqual(await h.delivery.states(OWNER, ['lead-2']), { 'lead-2': 'waiting' });
+  assert.equal((await h.journal.latest(OWNER, 'lead-2'))?.resultMeta.code, 'tier_inactive');
+  assert.equal(h.google.rows.get(SHEET)?.length, 1, 'в таблицу не пишем');
+  // Обход и «повторить» без тарифа ничего не делают, к Google не обращаются.
+  later(h, 60 * 60_000);
+  await h.delivery.sweep();
+  assert.equal(await h.delivery.retryLead(OWNER, 'lead-2'), 'tier_inactive');
+  assert.equal(await h.delivery.backfill(OWNER), 0);
+  assert.equal(h.google.appendRequests.length, 1);
+  assert.equal(h.google.driveRequests, drive, 'и проверки корзины нет');
+  // Подключение не обрывается и уведомлений о поломке нет.
+  assert.equal(h.connections.get(OWNER)?.status, 'connected');
+  assert.deepEqual(h.notified, []);
+
+  tier.active = true;
+  assert.equal(await h.delivery.backfill(OWNER), 1);
+  assert.equal(h.google.rows.get(SHEET)?.length, 2);
+  assert.deepEqual(await h.delivery.states(OWNER, ['lead-2']), { 'lead-2': 'written' });
 });
