@@ -459,6 +459,8 @@ export interface BotOverview {
   leadNotify?: { telegramLinked: boolean };
   /** Где установлен виджет; у старого сервера поля нет. */
   install?: { sites: WidgetSiteView[] };
+  /** Каталог автоматизаций с переключателями бота (сервер: builder/automations.ts); у старого сервера поля нет. */
+  automations?: AutomationView[];
   /** Обращения в этом месяце по тарифу (P3); у старого сервера поля нет. */
   requests?: {
     tier: 'start' | 'growth' | 'business' | 'scale' | null;
@@ -506,6 +508,39 @@ export interface BotLeadView {
 
 export function fetchBot(id: string): Promise<BotOverview> {
   return call(`/${enc(id)}/bot`);
+}
+
+export type AutomationTemplateId = 'lead_to_sheet' | 'lead_to_manager' | 'daily_lead_summary';
+
+export interface AutomationView {
+  id: AutomationTemplateId;
+  version: number;
+  event: 'lead.created' | 'schedule.daily';
+  enabled: boolean;
+  options?: { email: boolean; telegram: boolean };
+  available: boolean;
+  risk: 'low' | 'medium' | 'high' | 'critical';
+  approval: 'none' | 'required' | 'forbidden';
+  connections: Array<{
+    id: 'google_sheets' | 'owner_email' | 'owner_telegram';
+    kind: 'external_service' | 'account';
+    optional?: boolean;
+  }>;
+}
+
+export type AutomationsPatch = Partial<
+  Record<
+    AutomationTemplateId,
+    { enabled?: boolean; confirmed?: boolean; options?: { email?: boolean; telegram?: boolean } }
+  >
+>;
+
+/** Переключатели каталога автоматизаций бота: `PUT /bot` с полем `automations`. */
+export function saveBotAutomations(
+  id: string,
+  automations: AutomationsPatch,
+): Promise<BotOverview> {
+  return call(`/${enc(id)}/bot`, { method: 'PUT', ...json({ automations }) });
 }
 
 export function saveBot(id: string, patch: Partial<BotSettings>): Promise<BotOverview> {

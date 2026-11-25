@@ -37,6 +37,7 @@ import {
   listSolutions,
   type SolutionView,
 } from '@/features/builder/api';
+import { BUILDER_WIZARD_LIVE, wizardSetupPath, wizardStartPath } from '@/features/builder/wizard';
 import { BusinessProfile } from './business-profile';
 import {
   CombinedEstimate,
@@ -866,13 +867,34 @@ function SolutionAction({
       </Link>
     );
   }
+  // Мастер (за переключателем BUILDER_WIZARD_LIVE): бот для клиентов создаётся и настраивается по
+  // шагам; остальные рецепты — как раньше.
+  const wizard = BUILDER_WIZARD_LIVE && opportunity.recipe === 'customer_bot';
   if (existing) {
     return (
       <Link
-        to={`/solutions/${existing.id}`}
+        to={
+          wizard && existing.status === 'draft'
+            ? wizardSetupPath(existing.id)
+            : `/solutions/${existing.id}`
+        }
         className={buttonClasses({ variant: 'secondary', size: 'sm', className: ACTION_WRAP })}
       >
         {tool ? t('builder.report.openTool') : t('builder.report.open')}
+      </Link>
+    );
+  }
+  if (wizard) {
+    return (
+      <Link
+        to={wizardStartPath(analysis.id, opportunity.id)}
+        className={buttonClasses({
+          variant: primary ? 'primary' : 'outline',
+          size: 'sm',
+          className: ACTION_WRAP,
+        })}
+      >
+        {start ? t('builder.report.start') : t('builder.report.create')}
       </Link>
     );
   }

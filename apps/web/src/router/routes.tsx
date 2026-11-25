@@ -89,8 +89,23 @@ const appRoutes: RouteObject[] = [
         lazy: lazyPage(() => import('@/pages/solutions/solutions-list-page'), 'SolutionsListPage'),
       },
       {
+        // Мастер решения (docs/BUILDER_V1.md): шаг 1 из анализа или галереи, шаг 2 — настройка бота.
+        path: 'solutions/new',
+        lazy: lazyPage(
+          () => import('@/pages/solutions/wizard/wizard-start-page'),
+          'WizardStartPage',
+        ),
+      },
+      {
         path: 'solutions/:solutionId',
         lazy: lazyPage(() => import('@/pages/solutions/solution-page'), 'SolutionPage'),
+      },
+      {
+        path: 'solutions/:solutionId/setup',
+        lazy: lazyPage(
+          () => import('@/pages/solutions/wizard/wizard-setup-page'),
+          'WizardSetupPage',
+        ),
       },
       {
         path: 'solutions/:solutionId/runs/:runId',

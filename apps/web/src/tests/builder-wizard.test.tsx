@@ -1,0 +1,410 @@
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useAuth } from '@/features/auth/auth-store';
+import type {
+  AutomationView,
+  BotOverview,
+  SolutionDetails,
+  SolutionView,
+} from '@/features/builder/api';
+import { BUILDER_WIZARD_LIVE } from '@/features/builder/wizard';
+import type { AnalysisView, OpportunityView } from '@/features/discovery/api';
+import { en } from '@/i18n/en';
+import { ru } from '@/i18n/ru';
+import { setSiteFeatures } from '@/lib/features';
+import { renderRoute, resetAuth, resetPreferences } from './test-utils';
+
+interface Call {
+  method: string;
+  path: string;
+  body: Record<string, unknown> | null;
+}
+
+const json = (status: number, body: unknown) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+function stubFetch(handler: (call: Call) => Response) {
+  const calls: Call[] = [];
+  vi.stubGlobal('fetch', async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    const url = new URL(String(input), 'http://localhost');
+    const call = {
+      method: (init.method ?? 'GET').toUpperCase(),
+      path: url.pathname,
+      body: init.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null,
+    };
+    calls.push(call);
+    return handler(call);
+  });
+  return calls;
+}
+
+const OPPORTUNITY: OpportunityView = {
+  id: 'o-bot',
+  position: 0,
+  title: 'Бот отвечает покупателям',
+  area: null,
+  recipe: 'customer_bot',
+  problem: 'Вопросы покупателей ночью остаются без ответа',
+  solution: 'Бот на сайте отвечает по каталогу и принимает заявки',
+  requires: ['text_generation', 'customer_bot_page'],
+  otherRequirement: null,
+  dataNeeded: [],
+  integrationsNeeded: [],
+  effort: 'low',
+  effortReason: '',
+  risks: [],
+  limitations: [],
+  successCriteria: [],
+  firstStep: '',
+  feasibilityStatus: 'ready',
+  feasibility: {
+    status: 'ready',
+    blockers: [
+      {
+        capability: 'crm',
+        label: 'CRM',
+        hint: 'Подключение CRM — позже',
+        status: 'not_supported',
+      },
+    ] as never,
+    available: [
+      {
+        capability: 'customer_bot_page',
+        label: 'Бот для клиентов',
+        hint: '',
+        status: 'ready',
+      },
+    ] as never,
+  },
+  impact: { kind: 'qualitative', benefit: 'Быстрее отвечать', missing: '', note: '' } as never,
+  priority: 0,
+};
+
+function analysis(): AnalysisView {
+  return {
+    id: 'a1',
+    status: 'ready',
+    mode: 'free',
+    language: 'ru',
+    guest: false,
+    inputText: 'Магазин цветов',
+    context: null,
+    questions: [],
+    answers: {},
+    summary: null,
+    coverage: null,
+    source: null,
+    saved: true,
+    stages: { context: null, discovery: null },
+    opportunities: [OPPORTUNITY],
+    cost: { chargedCredits: 0, sponsored: true },
+    createdAt: '2026-11-25T10:00:00.000Z',
+    updatedAt: '2026-11-25T10:00:00.000Z',
+  };
+}
+
+function details(patch: Partial<SolutionDetails['solution']> = {}): SolutionDetails {
+  return {
+    solution: {
+      id: 'b1',
+      type: 'customer_bot',
+      kind: 'assistant',
+      template: 'customer_bot',
+      bot: {
+        slug: 'lisa-shop',
+        greeting: 'Здравствуйте!',
+        quickReplies: [],
+        dailyCapCredits: 1000,
+        corrections: [],
+      },
+      status: 'draft',
+      name: 'Лиса',
+      currentVersion: 1,
+      activeVersion: null,
+      source: { analysisId: 'a1', opportunityId: 'o-bot', title: OPPORTUNITY.title },
+      createdAt: '2026-11-25T10:00:00.000Z',
+      updatedAt: '2026-11-25T10:00:00.000Z',
+      ...patch,
+    },
+    config: {
+      name: 'Лиса',
+      purpose: 'Отвечает покупателям',
+      instructions: '',
+      tone: 'friendly',
+      knowledge: 'Доставка по Астане — 1–2 дня.',
+      examples: [],
+      restrictions: [],
+      language: 'ru',
+    },
+    versions: [{ number: 1, createdAt: '2026-11-25T10:00:00.000Z' }],
+    cases: [],
+    run: null,
+    readiness: { ready: false, reason: 'no_cases' } as never,
+    testQuote: null,
+  };
+}
+
+const AUTOMATIONS: AutomationView[] = [
+  {
+    id: 'lead_to_sheet',
+    version: 1,
+    event: 'lead.created',
+    enabled: true,
+    available: true,
+    risk: 'low',
+    approval: 'none',
+    connections: [{ id: 'google_sheets', kind: 'external_service' }],
+  },
+  {
+    id: 'lead_to_manager',
+    version: 1,
+    event: 'lead.created',
+    enabled: true,
+    options: { email: true, telegram: true },
+    available: true,
+    risk: 'low',
+    approval: 'none',
+    connections: [
+      { id: 'owner_email', kind: 'account', optional: true },
+      { id: 'owner_telegram', kind: 'account', optional: true },
+    ],
+  },
+  {
+    id: 'daily_lead_summary',
+    version: 1,
+    event: 'schedule.daily',
+    enabled: false,
+    available: false,
+    risk: 'low',
+    approval: 'none',
+    connections: [{ id: 'owner_email', kind: 'account', optional: true }],
+  },
+];
+
+function overview(automations = AUTOMATIONS): BotOverview {
+  const bot = details().solution.bot!;
+  return {
+    settings: { ...bot, leadNotify: { email: true, telegram: true } },
+    today: { replies: 0, credits: 0, newLeads: 0 },
+    publicUrl: 'https://ketner.org/b/lisa-shop',
+    leadNotify: { telegramLinked: false },
+    automations,
+  };
+}
+
+/** Сервер для мастера: анализ, список решений, создание, настройки, бот и переключатели. */
+function server(options: { solutions?: SolutionView[]; solution?: SolutionDetails } = {}) {
+  let current = options.solution ?? details();
+  let bot = overview();
+  return stubFetch((call) => {
+    if (call.path === '/api/analyses/a1') {
+      return json(200, { analysis: analysis(), plans: null, rerun: null, retry: null });
+    }
+    const path = call.path.replace(/^\/api\/solutions/, '');
+    if (path === '' && call.method === 'GET') {
+      return json(200, { solutions: options.solutions ?? [] });
+    }
+    if (path === '/from-opportunity' && call.method === 'POST') {
+      return json(201, { solution: current.solution });
+    }
+    if (path === '/b1' && call.method === 'GET') return json(200, current);
+    if (path === '/b1/config' && call.method === 'PUT') {
+      current = {
+        ...current,
+        config: call.body!.config as SolutionDetails['config'],
+        solution: { ...current.solution, currentVersion: current.solution.currentVersion + 1 },
+      };
+      return json(200, current);
+    }
+    if (path === '/b1/bot' && call.method === 'GET') return json(200, bot);
+    if (path === '/b1/bot' && call.method === 'PUT') {
+      const patch = call.body!.automations as Record<string, { enabled?: boolean }>;
+      bot = {
+        ...bot,
+        automations: bot.automations!.map((item) =>
+          patch[item.id]?.enabled === undefined
+            ? item
+            : { ...item, enabled: patch[item.id]!.enabled! },
+        ),
+      };
+      return json(200, bot);
+    }
+    return json(404, { error: { code: 'not_found', message: '' } });
+  });
+}
+
+describe('мастер решения: шаги 1–2', () => {
+  beforeEach(() => {
+    resetPreferences();
+    resetAuth();
+    setSiteFeatures({ discovery: true });
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: { id: 'u1', email: 'owner@example.com', name: 'Owner' } as never,
+    });
+  });
+  afterEach(() => {
+    setSiteFeatures(null);
+    vi.unstubAllGlobals();
+  });
+
+  it('четыре шага с одними подписями; текущий отмечен, будущие — текстом', async () => {
+    server();
+    renderRoute('/solutions/new?analysis=a1&opportunity=o-bot');
+    const steps = await screen.findByRole('navigation', { name: 'Шаги мастера' });
+    const items = within(steps).getAllByRole('listitem');
+    expect(items.map((item) => item.getAttribute('data-step'))).toEqual([
+      'analysis',
+      'setup',
+      'connections',
+      'launch',
+    ]);
+    expect(items.map((item) => within(item).getAllByText(/./)[1]?.textContent)).toEqual([
+      'Анализ',
+      'Настройка',
+      'Подключения',
+      'Запуск',
+    ]);
+    expect(items[0]).toHaveAttribute('aria-current', 'step');
+    expect(within(steps).queryAllByRole('link')).toHaveLength(0);
+  });
+
+  it('шаг 1 из анализа: возможность, тип, что сделает Ketner; черновик → шаг 2', async () => {
+    const calls = server();
+    renderRoute('/solutions/new?analysis=a1&opportunity=o-bot');
+
+    expect(await screen.findByRole('heading', { name: 'Бот отвечает покупателям' })).toBeVisible();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Создание ИИ-агента');
+    expect(screen.getByText(/ИИ-агент для клиентов: отвечает на вопросы/)).toBeVisible();
+    expect(screen.getByText('Бот для клиентов')).toBeVisible();
+    expect(screen.getByText('Подключение CRM — позже')).toBeVisible();
+    expect(screen.getByText('Пока не поддерживается')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Создать черновик и перейти к настройке' }));
+    expect(await screen.findByRole('tab', { name: 'Поведение' })).toBeVisible();
+    const post = calls.find((call) => call.method === 'POST');
+    expect(post?.path).toBe('/api/solutions/from-opportunity');
+    expect(post?.body).toMatchObject({ analysisId: 'a1', opportunityId: 'o-bot' });
+    const steps = screen.getByRole('navigation', { name: 'Шаги мастера' });
+    expect(within(steps).getAllByRole('listitem')[1]).toHaveAttribute('aria-current', 'step');
+  });
+
+  it('решение по возможности уже есть — «Продолжить настройку» без второго черновика', async () => {
+    const calls = server({ solutions: [details().solution as unknown as SolutionView] });
+    renderRoute('/solutions/new?analysis=a1&opportunity=o-bot');
+    const link = await screen.findByRole('link', { name: 'Продолжить настройку' });
+    expect(link).toHaveAttribute('href', '/solutions/b1/setup');
+    expect(screen.queryByRole('button', { name: /Создать черновик/ })).toBeNull();
+    expect(calls.some((call) => call.method === 'POST')).toBe(false);
+  });
+
+  it('без анализа — с чего начать: анализ бизнеса', async () => {
+    server();
+    renderRoute('/solutions/new');
+    expect(await screen.findByRole('heading', { name: 'С чего начать' })).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Начать анализ' })).toHaveAttribute('href', '/');
+  });
+
+  it('шаг 2: стиль общения и знания сохраняются версией; правки не теряются при смене вкладки', async () => {
+    const calls = server();
+    renderRoute('/solutions/b1/setup');
+
+    expect(await screen.findByRole('tab', { name: 'Поведение' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    const steps = screen.getByRole('navigation', { name: 'Шаги мастера' });
+    // Шаг 1 пройден — ссылка к возможности анализа.
+    expect(within(steps).getByRole('link', { name: /Анализ/ })).toHaveAttribute(
+      'href',
+      '/solutions/new?analysis=a1&opportunity=o-bot',
+    );
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Официальный' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Знания' }));
+    const knowledge = screen.getByRole('textbox', { name: 'Знания' });
+    fireEvent.change(knowledge, { target: { value: 'Доставка по Астане — день в день.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить как новую версию' }));
+
+    await waitFor(() =>
+      expect(calls.some((call) => call.path === '/api/solutions/b1/config')).toBe(true),
+    );
+    const put = calls.find((call) => call.path === '/api/solutions/b1/config')!;
+    expect(put.body!.config).toMatchObject({
+      tone: 'formal',
+      knowledge: 'Доставка по Астане — день в день.',
+    });
+  });
+
+  it('шаг 2: автоматизации — переключатель сохраняется сразу, недоступная — с причиной', async () => {
+    const calls = server();
+    renderRoute('/solutions/b1/setup');
+    // На вкладках настроек кнопка сохранения есть, на вкладке автоматизаций — нет.
+    expect(await screen.findByRole('button', { name: 'Сохранить как новую версию' })).toBeVisible();
+    fireEvent.click(screen.getByRole('tab', { name: 'Автоматизации' }));
+
+    const sheet = document.querySelector('[data-automation="lead_to_sheet"]') as HTMLElement;
+    expect(within(sheet).getByText(/Нужна Google Таблица/)).toBeVisible();
+    expect(within(sheet).getByText('риск низкий')).toBeVisible();
+    fireEvent.click(within(sheet).getByRole('checkbox', { name: /Заявка → таблица/ }));
+    await waitFor(() =>
+      expect(within(sheet).getByRole('checkbox', { name: /Заявка → таблица/ })).not.toBeChecked(),
+    );
+    const put = calls.find(
+      (call) => call.method === 'PUT' && call.path === '/api/solutions/b1/bot',
+    );
+    expect(put?.body).toEqual({ automations: { lead_to_sheet: { enabled: false } } });
+
+    const summary = document.querySelector('[data-automation="daily_lead_summary"]') as HTMLElement;
+    expect(within(summary).getByRole('checkbox')).toBeDisabled();
+    expect(within(summary).getByText(/нужен запуск по расписанию/)).toBeVisible();
+
+    // Каналы уведомлений и подсказка о непривязанном Telegram.
+    const manager = document.querySelector('[data-automation="lead_to_manager"]') as HTMLElement;
+    expect(within(manager).getByRole('checkbox', { name: 'По почте' })).toBeChecked();
+    expect(within(manager).getByText(/Telegram не привязан/)).toBeVisible();
+    // На вкладке автоматизаций нет кнопки сохранения настроек.
+    expect(screen.queryByRole('button', { name: 'Сохранить как новую версию' })).toBeNull();
+  });
+
+  it('шаг 2 справа: проба «как клиент» и статистика с пустым состоянием до запуска', async () => {
+    server();
+    renderRoute('/solutions/b1/setup');
+    const panel = await screen.findByRole('complementary', { name: 'Проверка агента' });
+    expect(within(panel).getByRole('tab', { name: 'Предпросмотр' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(within(panel).getByRole('button', { name: 'Отправить' })).toBeVisible();
+    fireEvent.click(within(panel).getByRole('tab', { name: 'Статистика' }));
+    expect(within(panel).getByTestId('wizard-stats-empty')).toHaveTextContent(
+      'Статистика появится после запуска',
+    );
+    // Дальше — подключения и запуск на странице бота (шаги 3–4 — следующие PR).
+    expect(screen.getByRole('link', { name: 'Далее: подключения и запуск' })).toHaveAttribute(
+      'href',
+      '/solutions/b1',
+    );
+  });
+
+  it('не бот для клиентов — мастер ведёт на страницу решения', async () => {
+    server({ solution: details({ type: 'assistant', template: 'personal_assistant', bot: null }) });
+    renderRoute('/solutions/b1/setup');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Лиса' })).toBeVisible();
+    expect(screen.queryByRole('navigation', { name: 'Шаги мастера' })).toBeNull();
+  });
+
+  it('тексты мастера без обещаний конверсии и продаж; отчёт ведёт в мастер только после включения', () => {
+    for (const dict of [ru, en] as Array<Record<string, string>>) {
+      for (const [key, value] of Object.entries(dict)) {
+        if (!key.startsWith('wizard.')) continue;
+        expect(value, key).not.toMatch(/конверси|продаж|conversion|sales|%/i);
+      }
+    }
+    expect(BUILDER_WIZARD_LIVE).toBe(false);
+  });
+});
