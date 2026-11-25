@@ -2213,7 +2213,7 @@ export const en: Record<TranslationKey, string> = {
   'builder.bot.activate': 'Turn the bot on',
   'builder.bot.openPage': 'Open the bot page',
   'builder.bot.lead':
-    'The bot answers your customers on its own page and on your website. Replies count towards your plan’s requests; requests from customers are free and come to your email.',
+    'The bot answers your customers on its own page and on your website. Replies count towards your plan’s requests; requests from customers are free and come to you by email and Telegram, as set in “New request notifications” below, and into your Google Sheet if it is connected.',
   'builder.bot.share.title': 'Where the bot lives',
   'builder.bot.share.link': 'Bot page link',
   'builder.bot.share.copyLink': 'Copy link',
