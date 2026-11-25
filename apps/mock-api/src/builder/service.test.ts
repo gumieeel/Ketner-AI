@@ -126,6 +126,7 @@ async function setup(options: { exhausted?: boolean; failJudgeFor?: string[] } =
   await discovery.setOpportunities('alice', 'an-1', [
     opportunity('o-ok', 'alice', 'ready'),
     opportunity('o-no', 'alice', 'not_supported'),
+    { ...opportunity('o-bot', 'alice', 'ready'), recipe: 'customer_bot' },
   ]);
   // Бесплатный лимит создания и проверки (P2): черновики и прогоны платит он, а не баланс.
   const counters = new MemoryCounterStore();
@@ -406,4 +407,18 @@ test('помощников не больше лимита из services/discover
   assert.equal(fromOpportunity.ok, false);
   // У другого пользователя свой лимит.
   assert.equal((await service.createBlank(bob, 'Помощник Боба')).ok, true);
+});
+
+test('бот из возможности: шаг «заявка → менеджер» включён — письмо и Telegram', async () => {
+  const { service, store } = await setup();
+  const created = await service.createFromOpportunity(alice, {
+    analysisId: 'an-1',
+    opportunityId: 'o-bot',
+    confirm: true,
+  });
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  const saved = await store.getSolution('alice', created.solution.id);
+  assert.equal(saved?.type, 'customer_bot');
+  assert.deepEqual(saved?.bot?.leadNotify, { email: true, telegram: true });
 });

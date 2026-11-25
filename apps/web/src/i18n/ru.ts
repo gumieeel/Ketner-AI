@@ -2252,8 +2252,16 @@ export const ru = {
   'builder.bot.preview.empty': 'Бот ответит здесь.',
   'builder.bot.offerContact': 'Клиенту показана форма «Оставьте контакт»',
   'builder.bot.leads.title': 'Заявки',
+  'builder.bot.notify.title': 'Уведомления о новых заявках',
+  'builder.bot.notify.lead':
+    'Ketner сообщит вам о каждой новой заявке этого бота: имя, контакт и вопрос клиента.',
+  'builder.bot.notify.email': 'По почте',
+  'builder.bot.notify.telegram': 'В Telegram — бот Ketner',
+  'builder.bot.notify.telegramNotLinked':
+    'Telegram не привязан к вашему аккаунту — сообщения туда не придут.',
+  'builder.bot.notify.link': 'Привязать в настройках',
   'builder.bot.leads.empty':
-    'Заявок пока нет. Когда бот не знает ответа или клиент хочет заказать, он предлагает оставить контакт — заявка придёт сюда и вам на почту.',
+    'Заявок пока нет. Когда бот не знает ответа или клиент хочет заказать, он предлагает оставить контакт — заявка придёт сюда, вам на почту и в Telegram (если он привязан) — как настроено в «Уведомлениях о новых заявках».',
   'builder.bot.leads.markDone': 'Отметить обработанной',
   'builder.bot.leads.markNew': 'Вернуть в новые',
   'builder.bot.leads.new': 'Новая',

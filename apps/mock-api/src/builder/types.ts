@@ -60,6 +60,16 @@ export interface BotSettings {
   dailyCapCredits: number;
   /** Исправленные владельцем ответы: бот отвечает так на похожие вопросы. */
   corrections: Array<{ question: string; answer: string }>;
+  /**
+   * Шаг «заявка → менеджер» (builder/lead-notify.ts): куда сообщать о новой заявке. Нет поля — бот
+   * создан до шага: письмо да, Telegram нет.
+   */
+  leadNotify?: LeadNotifySettings;
+}
+
+export interface LeadNotifySettings {
+  email: boolean;
+  telegram: boolean;
 }
 
 export interface Solution {

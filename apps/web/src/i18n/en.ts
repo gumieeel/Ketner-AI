@@ -2269,8 +2269,16 @@ export const en: Record<TranslationKey, string> = {
   'builder.bot.preview.empty': 'The bot replies here.',
   'builder.bot.offerContact': 'The customer was shown the “Leave a contact” form',
   'builder.bot.leads.title': 'Requests',
+  'builder.bot.notify.title': 'New request notifications',
+  'builder.bot.notify.lead':
+    'Ketner tells you about every new request to this bot: the customer’s name, contact and question.',
+  'builder.bot.notify.email': 'By email',
+  'builder.bot.notify.telegram': 'In Telegram — the Ketner bot',
+  'builder.bot.notify.telegramNotLinked':
+    'Telegram is not linked to your account, so messages will not arrive there.',
+  'builder.bot.notify.link': 'Link it in settings',
   'builder.bot.leads.empty':
-    'No requests yet. When the bot does not know an answer or a customer wants to order, it offers to leave a contact — the request comes here and to your email.',
+    'No requests yet. When the bot does not know an answer or a customer wants to order, it offers to leave a contact — the request comes here, to your email and to Telegram (if linked), as set in “New request notifications”.',
   'builder.bot.leads.markDone': 'Mark as handled',
   'builder.bot.leads.markNew': 'Mark as new',
   'builder.bot.leads.new': 'New',

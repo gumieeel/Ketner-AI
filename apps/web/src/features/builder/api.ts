@@ -55,6 +55,11 @@ export interface BotSettings {
   quickReplies: string[];
   dailyCapCredits: number;
   corrections: Array<{ question: string; answer: string }>;
+  /**
+   * Шаг «заявка → менеджер»: куда сообщать владельцу о новой заявке. Сервер отдаёт его всегда
+   * (у ботов, созданных до шага, — письмо да, Telegram нет); у старого сервера поля нет.
+   */
+  leadNotify?: { email: boolean; telegram: boolean };
 }
 
 export const BOT_LIMITS = {
@@ -450,6 +455,8 @@ export interface BotOverview {
   settings: BotSettings;
   today: BotToday;
   publicUrl: string;
+  /** Привязан ли Telegram владельца (уведомления о заявках); у старого сервера поля нет. */
+  leadNotify?: { telegramLinked: boolean };
   /** Где установлен виджет; у старого сервера поля нет. */
   install?: { sites: WidgetSiteView[] };
   /** Обращения в этом месяце по тарифу (P3); у старого сервера поля нет. */

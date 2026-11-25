@@ -29,6 +29,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { notifyLead } from '../builder/lead-notify.js';
 import { Router, type Request, type Response } from 'express';
 import { AIGateway } from '../ai/gateway.js';
 import { botPlatformEnabled, config, type AiConfig, type BotPlatformRuntime } from '../config.js';
@@ -242,30 +243,20 @@ export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime 
             },
           }
         : {}),
-      ...(deps.mailer
-        ? {
-            notifyLead: async (target, solution, lead) => {
-              if (!target.email) return;
-              const link = `${siteUrl()}/solutions/${solution.id}`;
-              const lines = [
-                `Новая заявка от бота «${solution.name}».`,
-                '',
-                `Имя: ${lead.name}`,
-                `Контакт: ${lead.contact}`,
-                ...(lead.question ? [`Вопрос: ${lead.question}`] : []),
-                '',
-                `Все заявки и диалоги: ${link}`,
-              ];
-              const escape = (value: string) =>
-                value.replace(/[&<>"]/g, (char) => `&#${char.charCodeAt(0)};`);
-              await deps.mailer!.send({
-                to: target.email,
-                subject: `Новая заявка: ${lead.name.replace(/\s+/g, ' ')}`,
-                text: lines.join('\n'),
-                html: lines.map((line) => `<p>${escape(line)}</p>`).join(''),
-              });
-            },
-          }
+      // Шаг «заявка → менеджер»: письмо и Telegram по настройке бота, строка в логе на канал.
+      notifyLead: (target, solution, lead) =>
+        notifyLead(
+          {
+            ...(deps.mailer ? { mailer: deps.mailer } : {}),
+            ...(deps.ownerTelegram ? { telegram: deps.ownerTelegram } : {}),
+            siteUrl,
+          },
+          target,
+          solution,
+          lead,
+        ),
+      ...(deps.ownerTelegram
+        ? { telegramLinked: (userId: string) => deps.ownerTelegram!.canNotify(userId) }
         : {}),
     });
     return bots;
