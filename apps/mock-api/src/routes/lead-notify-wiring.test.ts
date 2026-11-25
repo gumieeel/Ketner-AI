@@ -269,3 +269,52 @@ test('каталог автоматизаций: обзор, переключа�
   assert.equal(mails.filter((message) => message.subject.startsWith('Новая заявка')).length, 0);
   assert.equal(telegram.sent.length, 0);
 });
+
+test('схема бота: узлы и описание по настройкам, состояние подключений, чужой бот — 404', async (t) => {
+  const { server } = await setup(t);
+  const owner = await signupOwner(server);
+  const id = await publishedBot(owner, 'lisa-notify-e', { email: true, telegram: true });
+  const headers = { Authorization: `Bearer ${owner.token}` };
+  type DiagramView = {
+    nodes: Array<{ id: string; kind: string; state?: string; stateLabel?: string }>;
+    edges: Array<{ from: string; to: string }>;
+    description: string[];
+  };
+  const diagram = await readJson<DiagramView>(
+    await fetch(`${server.baseUrl}/api/solutions/${id}/bot/diagram`, { headers }),
+  );
+  assert.deepEqual(
+    diagram.nodes.map((node) => node.id),
+    [
+      'trigger',
+      'agent:bot',
+      'event:lead.created',
+      'step:lead_to_sheet:step-1',
+      'service:spreadsheets_sync',
+      'step:lead_to_manager:step-1',
+    ],
+  );
+  // Таблица не подключена; почта есть, Telegram привязан (фейк сервера).
+  const sheet = diagram.nodes.find((node) => node.id === 'service:spreadsheets_sync')!;
+  assert.deepEqual([sheet.state, sheet.stateLabel], ['off', 'не подключена']);
+  const manager = diagram.nodes.find((node) => node.id === 'step:lead_to_manager:step-1')!;
+  assert.deepEqual([manager.state, manager.stateLabel], ['ok', 'почта, Telegram']);
+  assert.equal(diagram.description[0], 'Посетитель пишет боту → Бот «Лиса»');
+
+  // Выключили «заявка → таблица» — узлов таблицы нет.
+  await fetch(`${server.baseUrl}/api/solutions/${id}/bot`, {
+    method: 'PUT',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ automations: { lead_to_sheet: { enabled: false } } }),
+  });
+  const after = await readJson<DiagramView>(
+    await fetch(`${server.baseUrl}/api/solutions/${id}/bot/diagram`, { headers }),
+  );
+  assert.ok(!after.nodes.some((node) => node.id.includes('sheet')));
+
+  const stranger = await signupOwner(server);
+  const denied = await fetch(`${server.baseUrl}/api/solutions/${id}/bot/diagram`, {
+    headers: { Authorization: `Bearer ${stranger.token}` },
+  });
+  assert.equal(denied.status, 404);
+});

@@ -538,6 +538,28 @@ export async function fetchBotConversation(
   ).messages;
 }
 
+/** Схема бота только для чтения (сервер: builder/diagram.ts). */
+export interface BotDiagramNode {
+  id: string;
+  kind: 'trigger' | 'agent' | 'tool' | 'event' | 'step' | 'service';
+  label: string;
+  risk?: 'low' | 'medium' | 'high' | 'critical';
+  state?: 'ok' | 'attention' | 'paused' | 'off';
+  stateLabel?: string;
+  level: number;
+  row: number;
+}
+
+export interface BotDiagram {
+  nodes: BotDiagramNode[];
+  edges: Array<{ from: string; to: string }>;
+  description: string[];
+}
+
+export async function fetchBotDiagram(id: string): Promise<BotDiagram> {
+  return call<BotDiagram>(`/${enc(id)}/bot/diagram`);
+}
+
 export async function listBotLeads(id: string): Promise<BotLeadView[]> {
   return (await call<{ leads: BotLeadView[] }>(`/${enc(id)}/leads`)).leads;
 }

@@ -8,12 +8,14 @@ import {
   BOT_LIMITS,
   fetchBot,
   fetchBotConversation,
+  fetchBotDiagram,
   listBotConversations,
   listBotLeads,
   previewBot,
   saveBot,
   setBotLeadStatus,
   type BotConversationView,
+  type BotDiagram,
   type BotLeadView,
   type BotMessageView,
   type BotOverview,
@@ -27,6 +29,7 @@ import { formatDateTime } from '@/lib/format-date';
 import { ErrorNotice } from '@/pages/analysis/error-notice';
 import { BotLinkAndQr, BotSiteInstall } from './bot-install';
 import { GoogleSheetCard } from './google-sheet-card';
+import { ProcessDiagram } from './process-diagram';
 import { googleSheetsApi, type LeadDeliveryState } from '@/features/google/api';
 
 /**
@@ -70,6 +73,7 @@ export function BotPanel({ details }: { details: SolutionDetails }) {
     <>
       <ShareSection details={details} overview={overview} onRefresh={refresh} />
       <PreviewSection id={id} />
+      <DiagramSection id={id} overview={overview} />
       <LeadsSection id={id} overview={overview} onSave={save} />
       <ConversationsSection id={id} overview={overview} onSave={save} />
       {/* Настройки пересобираются после любого сохранения (и исправления из диалога). */}
@@ -110,6 +114,36 @@ const inputClass =
   'h-11 w-full rounded-xl border border-stroke bg-surface px-4 text-[16px] text-text placeholder:text-subtle focus:border-stroke-strong focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40';
 const textareaClass =
   'block w-full resize-y rounded-xl border border-stroke bg-surface px-4 py-3 text-[16px] leading-6 text-text placeholder:text-subtle focus:border-stroke-strong focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40';
+
+// ─── Схема ───────────────────────────────────────────────────────────────────
+
+/** Схема только для чтения; перестраивается после каждого сохранения настроек (новый overview). */
+function DiagramSection({ id, overview }: { id: string; overview: BotOverview }) {
+  const { t } = useTranslation();
+  const [diagram, setDiagram] = useState<BotDiagram | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let current = true;
+    fetchBotDiagram(id).then(
+      (value) => {
+        if (current) setDiagram(value);
+      },
+      () => {
+        if (current) setFailed(true);
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [id, overview]);
+  // Старый сервер без схемы или сбой — раздела нет: остальная страница работает.
+  if (failed || !diagram) return null;
+  return (
+    <Section title={t('builder.bot.diagram.title')} lead={t('builder.bot.diagram.lead')}>
+      <ProcessDiagram diagram={diagram} />
+    </Section>
+  );
+}
 
 // ─── Где живёт бот и расход ──────────────────────────────────────────────────
 

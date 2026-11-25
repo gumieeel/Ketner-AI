@@ -2269,6 +2269,15 @@ export const en: Record<TranslationKey, string> = {
   'builder.bot.preview.empty': 'The bot replies here.',
   'builder.bot.offerContact': 'The customer was shown the “Leave a contact” form',
   'builder.bot.leads.title': 'Requests',
+  'builder.bot.diagram.title': 'How the bot works',
+  'builder.bot.diagram.lead':
+    'The diagram is built from the bot settings and connections and updates by itself. There is nothing to edit by hand.',
+  'builder.bot.diagram.label': 'Bot process diagram',
+  'builder.bot.diagram.asText': 'Diagram as text',
+  'builder.bot.diagram.risk.low': 'low risk',
+  'builder.bot.diagram.risk.medium': 'medium risk',
+  'builder.bot.diagram.risk.high': 'high risk',
+  'builder.bot.diagram.risk.critical': 'critical risk',
   'builder.bot.notify.title': 'New request notifications',
   'builder.bot.notify.lead':
     'Ketner tells you about every new request to this bot: the customer’s name, contact and question.',

@@ -2252,6 +2252,15 @@ export const ru = {
   'builder.bot.preview.empty': 'Бот ответит здесь.',
   'builder.bot.offerContact': 'Клиенту показана форма «Оставьте контакт»',
   'builder.bot.leads.title': 'Заявки',
+  'builder.bot.diagram.title': 'Как работает бот',
+  'builder.bot.diagram.lead':
+    'Схема строится из настроек бота и подключений и обновляется сама. Менять её вручную не нужно.',
+  'builder.bot.diagram.label': 'Схема работы бота',
+  'builder.bot.diagram.asText': 'Схема текстом',
+  'builder.bot.diagram.risk.low': 'риск низкий',
+  'builder.bot.diagram.risk.medium': 'риск средний',
+  'builder.bot.diagram.risk.high': 'риск высокий',
+  'builder.bot.diagram.risk.critical': 'риск критический',
   'builder.bot.notify.title': 'Уведомления о новых заявках',
   'builder.bot.notify.lead':
     'Ketner сообщит вам о каждой новой заявке этого бота: имя, контакт и вопрос клиента.',

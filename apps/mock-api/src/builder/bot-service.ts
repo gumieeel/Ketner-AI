@@ -13,6 +13,8 @@
 
 import { randomUUID } from 'node:crypto';
 import { leadNotifyOf } from './lead-notify.js';
+import { botSolutionSpec } from './bot-spec.js';
+import { diagramFromSpec, type ConnectionState, type Diagram } from './diagram.js';
 import {
   applyAutomationsPatch,
   automationsView,
@@ -108,6 +110,11 @@ export interface BotServiceDeps {
   notifyLead?: (owner: BotOwner, solution: Solution, lead: BotLead) => Promise<unknown>;
   /** Привязан ли Telegram владельца (кабинет: подсказка у переключателя «в Telegram»). */
   telegramLinked?: (userId: string) => boolean;
+  /**
+   * Состояние Google Таблицы владельца для схемы (builder/diagram.ts): подключение и тариф. Нет
+   * функции — «не подключена».
+   */
+  googleSheetState?: (userId: string) => ConnectionState;
   /**
    * Путь платформы (этап D, builder/bot-agent.ts) за флагом BOT_PLATFORM_RUNTIME. Нет или флаг
    * выключен для решения — прежний путь (builder.answer), без каких-либо изменений.
@@ -536,6 +543,27 @@ export class BotService {
         ? { requests: requestsView(await this.deps.tierUsage.decision(ownerId)) }
         : {}),
     };
+  }
+
+  /**
+   * Схема бота только для чтения (docs/BUILDER_V1.md, раздел 5): из спецификации, выведенной из
+   * настроек и переключателей, с состоянием подключений.
+   */
+  async diagram(ownerId: string, id: string, language: Language): Promise<Diagram | null> {
+    const solution = await this.ownBot(ownerId, id);
+    if (!solution?.bot) return null;
+    const channels = leadNotifyOf(solution.bot);
+    const email = Boolean(this.deps.owner(ownerId)?.email);
+    const telegram = this.deps.telegramLinked?.(ownerId) ?? false;
+    return diagramFromSpec(
+      botSolutionSpec(solution),
+      {
+        google_sheets: this.deps.googleSheetState?.(ownerId) ?? 'not_connected',
+        owner_email: channels.email ? (email ? 'connected' : 'not_connected') : 'off',
+        owner_telegram: channels.telegram ? (telegram ? 'connected' : 'not_connected') : 'off',
+      },
+      language,
+    );
   }
 
   async updateSettings(
