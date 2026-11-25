@@ -26,6 +26,11 @@ export type CapabilityAvailability =
   | 'setup'
   /** Работает после подключения внешнего сервиса, который Ketner поддерживает. */
   | 'integration'
+  /**
+   * Работает частично и после подключения: что именно есть, а чего нет — в `label` и `hint`. Для
+   * выполнимости — как `integration` (нужно подключение); модель видит пометку «частично».
+   */
+  | 'partial'
   /** У Ketner этого нет. */
   | 'unavailable';
 
@@ -271,14 +276,16 @@ export const CAPABILITIES: Readonly<Record<CapabilityId, Capability>> = {
   },
   spreadsheets_sync: {
     id: 'spreadsheets_sync',
-    availability: 'unavailable',
+    // Этап F (23.11.2026): заявки бота пишутся строками в Google Таблицу владельца. Синхронизации
+    // произвольных таблиц нет — поэтому «частично» (решение владельца 23.11.2026).
+    availability: 'partial',
     label: {
-      ru: 'Синхронизация с таблицами (Google, Excel онлайн)',
-      en: 'Spreadsheet sync (Google, Excel online)',
+      ru: 'Google Таблицы: заявки бота строками в вашу таблицу (синхронизации произвольных таблиц нет)',
+      en: "Google Sheets: the bot's requests as rows in your sheet (no sync of arbitrary spreadsheets)",
     },
     hint: {
-      ru: 'Пока нет: скопируйте нужные данные в знания помощника.',
-      en: "Not yet: copy the data you need into the assistant's knowledge.",
+      ru: 'Есть: каждая заявка бота — строка в вашей Google Таблице. Подключите таблицу в кабинете бота, раздел «Заявки». Синхронизации произвольных таблиц (Google, Excel онлайн) нет: нужные данные можно скопировать в знания помощника.',
+      en: "Available: every request to your bot becomes a row in your Google Sheet. Connect the sheet in the bot's cabinet, «Requests» section. Arbitrary spreadsheets (Google, Excel online) are not synced: copy the data you need into the assistant's knowledge.",
     },
   },
   messengers: {
@@ -318,6 +325,10 @@ export function catalogForPrompt(language: Language): string {
     available: { ru: 'есть', en: 'available' },
     setup: { ru: 'есть после настройки', en: 'available after setup' },
     integration: { ru: 'есть после подключения', en: 'available after connecting' },
+    partial: {
+      ru: 'частично, после подключения: только то, что в описании',
+      en: 'partly, after connecting: only what is described',
+    },
     unavailable: { ru: 'нет', en: 'not available' },
   };
   return releasedCapabilityIds()

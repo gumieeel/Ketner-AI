@@ -50,6 +50,9 @@ function statusOf(
       return id === 'api_access' && user.hasPurchasedCredits ? 'ready' : 'needs_setup';
     case 'integration':
       return id === 'github_repo' && user.githubConnected ? 'ready' : 'needs_integration';
+    // Частично (например, заявки — в Google Таблицу): после подключения, ограничения — в подсказке.
+    case 'partial':
+      return 'needs_integration';
     case 'unavailable':
       return 'not_supported';
   }
