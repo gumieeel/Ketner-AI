@@ -671,6 +671,14 @@ export function createApiRouter(deps: ApiDeps): Router {
     ...(deps.builder ? { service: deps.builder } : {}),
     mailer: ownerMailer(deps),
     onLeadCreated: (lead) => sheetsDelivery.onLeadCreated(lead),
+    // Схема бота: Google Таблица подключена, требует действия или на паузе из-за тарифа.
+    googleSheetState: (userId) => {
+      const connection = activeGoogleStore.get(userId);
+      if (!connection || connection.status === 'disconnected') return 'not_connected';
+      if (connection.status !== 'connected') return connection.status;
+      if (tierEnforced() && activeAccountTiers.tierOf(userId) === null) return 'tier_inactive';
+      return connection.spreadsheetId ? 'connected' : 'sheet_missing';
+    },
     ownerTelegram: {
       canNotify: (userId) => (deps.botService ?? telegramBotService).canNotifyUser(userId),
       notifyOwner: (userId, text) =>

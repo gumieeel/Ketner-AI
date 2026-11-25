@@ -52,6 +52,7 @@ import { BotAgentRuntime } from '../builder/bot-agent.js';
 import { AGENT_SPEC_MAX_TIMEOUT_MS } from '../platform/agent-spec.js';
 import { startExecutionReaper } from '../platform/execution-reaper.js';
 import { PostgresExecutionJournal } from '../platform/journal.js';
+import type { ConnectionState } from '../builder/diagram.js';
 import { BotService, type BotOwner } from '../builder/bot-service.js';
 import { BuilderService, CHAT_HISTORY, type BuilderCaller } from '../builder/service.js';
 import type {
@@ -142,6 +143,8 @@ export interface SolutionsRouterDeps {
   ownerTelegram?: OwnerTelegram;
   /** Новая заявка бота: запись в Google Таблицу владельца (этап F; выключено переключателем). */
   onLeadCreated?: (lead: BotLead) => Promise<void>;
+  /** Состояние Google Таблицы владельца для схемы бота (подключение и тариф). */
+  googleSheetState?: (userId: string) => ConnectionState;
   /** Общие сервисы Builder и ботов (routes/index.ts создаёт один на оба роутера). */
   runtime?: BuilderRuntime;
 }
@@ -258,6 +261,7 @@ export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime 
       ...(deps.ownerTelegram
         ? { telegramLinked: (userId: string) => deps.ownerTelegram!.canNotify(userId) }
         : {}),
+      ...(deps.googleSheetState ? { googleSheetState: deps.googleSheetState } : {}),
     });
     return bots;
   };
@@ -1338,6 +1342,18 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
       const overview = await bots.overview(caller.userId, String(request.params.id));
       if (!overview) return botNotFound(response);
       response.json(withShare(overview));
+    }),
+  );
+
+  // Схема бота только для чтения: узлы, связи и то же текстом (docs/BUILDER_V1.md, раздел 5).
+  router.get(
+    '/:id/bot/diagram',
+    handle(async (_builder, caller, request, response) => {
+      const bots = botsReady(response);
+      if (!bots) return;
+      const diagram = await bots.diagram(caller.userId, String(request.params.id), caller.language);
+      if (!diagram) return botNotFound(response);
+      response.json(diagram);
     }),
   );
 
