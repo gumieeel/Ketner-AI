@@ -197,7 +197,7 @@ export function evaluateSolution(
         path,
         message: `${id} is not available in Ketner`,
       });
-    else if (state === 'integration')
+    else if (state === 'integration' || state === 'partial')
       add('integration', {
         code: 'integration_required',
         path,
