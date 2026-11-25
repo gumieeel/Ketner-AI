@@ -1,10 +1,12 @@
 import { screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
-import { STARTING_PRICE, TIERS } from '@/features/billing/tiers';
+import { CUSTOMER_TELEGRAM_CHANNEL_LIVE, STARTING_PRICE, TIERS } from '@/features/billing/tiers';
 import { RELEASES, ROADMAP } from '@/features/content/changelog';
 import { KNOWN_ISSUES } from '@/features/content/known-issues';
 import { HOME_FAQ } from '@/features/discovery/home-content';
+import { en } from '@/i18n/en';
+import { ru } from '@/i18n/ru';
 import { setSiteFeatures } from '@/lib/features';
 import { installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetPreferences } from './test-utils';
@@ -74,9 +76,31 @@ describe('тексты о продукте', () => {
     const text = latest!.items.map((item) => item.text).join(' ');
     expect(text).toMatch(/В тарифе Start теперь 1 внешний сервис/);
     expect(text).toMatch(
-      /Каналы — страница бота, кнопка на сайте, ваш бот в Telegram — сервисами не считаются/,
+      /Каналы \(страница бота, кнопка на сайте, позже — ваш бот в Telegram\) сервисами не считаются/,
     );
     expect(text).toMatch(/заявки не теряются/);
+    expect(text).toMatch(/после продления заявки допишутся сами/);
+  });
+
+  it('канал «ваш бот в Telegram» не сделан — тексты о тарифах называют его «позже»', () => {
+    const texts = [
+      ...RELEASES[0]!.items.map((item) => item.text),
+      ru['pricing.terms.serviceText'],
+      en['pricing.terms.serviceText'],
+    ];
+    for (const text of texts) {
+      if (CUSTOMER_TELEGRAM_CHANNEL_LIVE) {
+        // Канал включили — «позже» больше не правда.
+        expect(text).not.toMatch(/позже — ваш бот в Telegram|later, your Telegram bot/);
+        continue;
+      }
+      // Каждое упоминание бота клиента в Telegram — с «позже».
+      const mentions = text.match(/(?:ваш бот в Telegram|your Telegram bot)/g) ?? [];
+      const later = text.match(/(?:позже — ваш бот в Telegram|later, your Telegram bot)/g) ?? [];
+      expect(later.length).toBe(mentions.length);
+    }
+    expect(ru['pricing.terms.serviceText']).toMatch(/позже — ваш бот в Telegram/);
+    expect(en['pricing.terms.serviceText']).toMatch(/later, your Telegram bot/);
   });
 
   it('«Что нового»: заявки в Google Таблицу (шаг 5b)', () => {

@@ -73,6 +73,10 @@ const DAY_MS = 24 * 60 * 60_000;
  */
 export const TRASH_BEFORE_WRITE_MS = 60_000;
 
+/** Сколько заявок, ждавших тариф, обход дописывает за раз после продления. */
+export const TIER_RESUME_PER_SWEEP = 20;
+const RESUME_SCAN = 500;
+
 export interface LeadSource {
   getLead(ownerId: string, leadId: string): Promise<BotLead | null>;
   getSolution(ownerId: string, id: string): Promise<Solution | null>;
@@ -92,7 +96,8 @@ export interface SheetsDeliveryDeps {
   siteUrl: () => string;
   /**
    * Активен ли тариф аккаунта (решение владельца 23.11.2026). Нет — запись в таблицу ждёт с кодом
-   * `tier_inactive`, как при отозванном доступе; после продления — «Дописать пропущенные».
+   * `tier_inactive`, как при отозванном доступе; после продления обход дописывает такие заявки сам
+   * (не больше `TIER_RESUME_PER_SWEEP` за обход), кнопка «Дописать пропущенные» тоже работает.
    * Уведомления владельцу о заявках идут независимо (builder/lead-notify.ts). Нет функции — активен.
    */
   tierActive?: (userId: string) => boolean;
@@ -118,6 +123,12 @@ export class SheetsDelivery {
   private readonly tokens = new Map<string, { token: string; expiresAt: number }>();
   private readonly trashCheckedAt = new Map<string, number>();
   private readonly busy = new Set<string>();
+  /**
+   * Аккаунты, у которых могут быть шаги, ждущие тариф (`tier_inactive`): отмечаются при таком отказе.
+   * После перезапуска процесса отметок нет — первый обход проверяет все подключённые аккаунты.
+   */
+  private readonly tierWaiting = new Set<string>();
+  private tierWaitingSeeded = false;
   private readonly fetchImpl: typeof fetch;
   private readonly now: () => number;
   private readonly log: (message: string) => void;
@@ -281,6 +292,7 @@ export class SheetsDelivery {
       }
       if (!this.tierActive(effect.userId)) {
         // Тариф не активен: запись ждёт продления, к Google не обращаемся.
+        this.tierWaiting.add(effect.userId);
         await this.failBefore(journal, effect, { code: 'tier_inactive', retry: false });
         return;
       }
@@ -425,6 +437,7 @@ export class SheetsDelivery {
           await journal.markUnknown(effect);
         } else if (effect.status === 'reserved') {
           if (!connected) {
+            if (connection?.status === 'connected') this.tierWaiting.add(effect.userId);
             await journal.fail(effect, {
               code:
                 connection?.status === 'connected'
@@ -447,6 +460,11 @@ export class SheetsDelivery {
         this.log(`[sheets] обход: заявка ${effect.leadId}: ${String(error)}`);
       }
     }
+    try {
+      handled += await this.resumeAfterTier(journal);
+    } catch (error) {
+      this.log(`[sheets] обход: дописать после продления тарифа: ${String(error)}`);
+    }
     // Раз в сутки — не в корзине ли таблицы подключённых аккаунтов.
     for (const connection of this.deps.connections.list()) {
       if (
@@ -458,6 +476,41 @@ export class SheetsDelivery {
       }
     }
     return handled;
+  }
+
+  /**
+   * Тариф снова активен: заявки, ждавшие его (`tier_inactive`), дописываются тем же путём, что
+   * «Дописать пропущенные» — владелец не виноват и нажимать кнопку не должен. Не больше
+   * `TIER_RESUME_PER_SWEEP` заявок за обход; остальные — в следующих обходах. Другие отказы
+   * (доступ, таблица) не трогаются: их владелец дописывает сам после починки.
+   */
+  private async resumeAfterTier(journal: DeliveryJournal): Promise<number> {
+    if (!this.tierWaitingSeeded) {
+      this.tierWaitingSeeded = true;
+      for (const connection of this.deps.connections.list()) {
+        if (connection.status === 'connected') this.tierWaiting.add(connection.userId);
+      }
+    }
+    let resumed = 0;
+    for (const userId of [...this.tierWaiting]) {
+      if (resumed >= TIER_RESUME_PER_SWEEP) break;
+      if (!this.available(userId) || !this.tierActive(userId)) continue;
+      if (this.deps.connections.get(userId)?.status !== 'connected') continue;
+      const failed = await journal.failed(userId, RESUME_SCAN);
+      const waiting = failed.filter((effect) => effect.resultMeta.code === 'tier_inactive');
+      let left = waiting.length;
+      for (const effect of waiting) {
+        if (resumed >= TIER_RESUME_PER_SWEEP) break;
+        if (this.deps.connections.get(userId)?.status !== 'connected') break;
+        const result = await this.retryLead(userId, effect.leadId);
+        if (result === 'retrying' || result === 'started') resumed += 1;
+        left -= 1;
+      }
+      // Отметку снимаем, только когда ждущих не осталось и список не был обрезан.
+      if (left === 0 && failed.length < RESUME_SCAN) this.tierWaiting.delete(userId);
+    }
+    if (resumed > 0) this.log(`[sheets] обход: после продления тарифа дописано заявок: ${resumed}`);
+    return resumed;
   }
 
   // --- владелец ------------------------------------------------------------------------------
