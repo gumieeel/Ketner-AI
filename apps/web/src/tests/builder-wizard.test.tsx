@@ -200,6 +200,17 @@ function server(options: { solutions?: SolutionView[]; solution?: SolutionDetail
   let current = options.solution ?? details();
   let bot = overview();
   return stubFetch((call) => {
+    if (call.path === '/api/integrations/google') {
+      return json(200, {
+        connected: false,
+        status: null,
+        email: null,
+        spreadsheetUrl: null,
+        lastErrorCode: null,
+        connectedAt: null,
+        tier: { active: true, name: 'Start', servicesUsed: 0, servicesLimit: 1 },
+      });
+    }
     if (call.path === '/api/analyses/a1') {
       return json(200, { analysis: analysis(), plans: null, rerun: null, retry: null });
     }
@@ -384,11 +395,100 @@ describe('мастер решения: шаги 1–2', () => {
     expect(within(panel).getByTestId('wizard-stats-empty')).toHaveTextContent(
       'Статистика появится после запуска',
     );
-    // Дальше — подключения и запуск на странице бота (шаги 3–4 — следующие PR).
-    expect(screen.getByRole('link', { name: 'Далее: подключения и запуск' })).toHaveAttribute(
+    // Дальше — шаг 3, подключения.
+    expect(screen.getByRole('link', { name: 'Далее: подключения' })).toHaveAttribute(
+      'href',
+      '/solutions/b1/connections',
+    );
+  });
+
+  it('шаг 2: у работающего агента рядом с переключателями — «изменения действуют сразу»', async () => {
+    server({ solution: details({ status: 'active', activeVersion: 1 }) });
+    renderRoute('/solutions/b1/setup');
+    fireEvent.click(await screen.findByRole('tab', { name: 'Автоматизации' }));
+    expect(screen.getByTestId('automations-live')).toHaveTextContent(
+      'Агент уже работает: изменения здесь сразу действуют на него.',
+    );
+  });
+
+  it('шаг 2: у черновика предупреждения о работающем агенте нет', async () => {
+    server();
+    renderRoute('/solutions/b1/setup');
+    fireEvent.click(await screen.findByRole('tab', { name: 'Автоматизации' }));
+    expect(screen.queryByTestId('automations-live')).toBeNull();
+  });
+
+  it('шаг 3: внешние сервисы (в тарифе), уведомления вам и каналы — отдельно', async () => {
+    server();
+    renderRoute('/solutions/b1/connections');
+
+    const services = await screen.findByRole('region', { name: 'Внешние сервисы' });
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Создание ИИ-агента для клиентов' }),
+    ).toBeVisible();
+    const steps = screen.getByRole('navigation', { name: 'Шаги мастера' });
+    expect(within(steps).getAllByRole('listitem')[2]).toHaveAttribute('aria-current', 'step');
+    expect(within(steps).getByRole('link', { name: /Настройка/ })).toHaveAttribute(
+      'href',
+      '/solutions/b1/setup',
+    );
+
+    expect(within(services).getByText(/Считаются в тарифе/)).toBeVisible();
+    expect(within(services).getByTestId('sheet-needed')).toHaveTextContent(
+      'Нужна для «Заявка → таблица»',
+    );
+    // Карточка Google Таблицы — та же, что на странице бота (со своим состоянием и тарифом).
+    expect(await within(services).findByTestId('google-sheet-card')).toBeVisible();
+    const crm = services.querySelector('[data-connection="crm"]') as HTMLElement;
+    expect(within(crm).getByText('скоро')).toBeVisible();
+    expect(within(crm).queryByRole('button')).toBeNull();
+
+    const notify = screen.getByRole('region', { name: 'Уведомления вам' });
+    expect(within(notify).getByText(/Не считаются в тарифе/)).toBeVisible();
+    const mail = notify.querySelector('[data-connection="email"]') as HTMLElement;
+    expect(within(mail).getByText('Письмо о заявке на owner@example.com.')).toBeVisible();
+    expect(within(mail).getByText('работает')).toBeVisible();
+    const telegram = notify.querySelector('[data-connection="telegram"]') as HTMLElement;
+    expect(within(telegram).getByText('не привязан')).toBeVisible();
+    expect(within(telegram).getByRole('link', { name: 'Привязать в настройках' })).toHaveAttribute(
+      'href',
+      '/settings',
+    );
+
+    const channels = screen.getByRole('region', { name: 'Каналы' });
+    expect(within(channels).getByText(/Есть на любом тарифе/)).toBeVisible();
+    const page = channels.querySelector('[data-connection="page"]') as HTMLElement;
+    expect(within(page).getByText('откроется после запуска')).toBeVisible();
+    const own = channels.querySelector('[data-connection="telegram-channel"]') as HTMLElement;
+    expect(within(own).getByText('позже')).toBeVisible();
+
+    expect(screen.getByRole('link', { name: '← Назад' })).toHaveAttribute(
+      'href',
+      '/solutions/b1/setup',
+    );
+    expect(screen.getByRole('link', { name: 'Далее: запуск' })).toHaveAttribute(
       'href',
       '/solutions/b1',
     );
+  });
+
+  it('шаг 3: «Заявка → таблица» выключена — таблица не обязательна; уведомления по каталогу', async () => {
+    const calls = server();
+    renderRoute('/solutions/b1/setup');
+    fireEvent.click(await screen.findByRole('tab', { name: 'Автоматизации' }));
+    const sheet = document.querySelector('[data-automation="lead_to_sheet"]') as HTMLElement;
+    fireEvent.click(within(sheet).getByRole('checkbox', { name: /Заявка → таблица/ }));
+    await waitFor(() => expect(calls.some((call) => call.method === 'PUT')).toBe(true));
+
+    fireEvent.click(screen.getByRole('link', { name: 'Далее: подключения' }));
+    expect(await screen.findByTestId('sheet-needed')).toHaveTextContent(
+      '«Заявка → таблица» выключена',
+    );
+  });
+
+  it('тип решения в кабинете — «ИИ-агент для клиентов»', () => {
+    expect(ru['builder.type.customer_bot']).toBe('ИИ-агент для клиентов');
+    expect(en['builder.type.customer_bot']).toBe('AI agent for customers');
   });
 
   it('не бот для клиентов — мастер ведёт на страницу решения', async () => {

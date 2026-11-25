@@ -1,6 +1,6 @@
 /**
  * Мастер решения (docs/BUILDER_V1.md, разделы 3 и 12): четыре шага с одними подписями для всех
- * типов. PR 3 — каркас и шаги 1–2 для бота для клиентов; шаги 3–4 пока на странице бота.
+ * типов. Шаги 1–3 — для ИИ-агента для клиентов (`customer_bot`); шаг 4 пока на странице бота.
  */
 
 /**
@@ -20,4 +20,8 @@ export function wizardStartPath(analysisId: string, opportunityId: string): stri
 
 export function wizardSetupPath(solutionId: string): string {
   return `/solutions/${encodeURIComponent(solutionId)}/setup`;
+}
+
+export function wizardConnectionsPath(solutionId: string): string {
+  return `/solutions/${encodeURIComponent(solutionId)}/connections`;
 }
