@@ -102,8 +102,6 @@ export interface AppDeps {
   googleSettings?: () => GoogleOAuthSettings | null;
   /** Настройки Google Picker («Выбрать прежнюю таблицу»); в тестах подменяются. */
   googlePicker?: () => GooglePickerConfig | null;
-  /** Другие подключённые внешние сервисы аккаунта для лимита тарифа (CRM, календарь — пока нет). */
-  otherExternalServices?: (userId: string) => number;
   /** Доставка заявок в Google Таблицу; в тестах — своя (обход вызывается вручную). */
   googleDelivery?: SheetsDelivery;
   /** Часовой пояс владельца для дат в Google Таблице; в тестах — в памяти. */

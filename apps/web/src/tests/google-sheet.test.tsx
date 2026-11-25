@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
 import type { BotOverview, SolutionDetails } from '@/features/builder/api';
@@ -346,74 +346,6 @@ describe('Google Таблица в кабинете бота (этап F)', () =
     await waitFor(() =>
       expect(calls.some((call) => call.path === '/api/integrations/google/start')).toBe(true),
     );
-  });
-
-  it('тариф: без тарифа и без места подключить нельзя — причина и ссылка; тариф снят — заявки ждут', async () => {
-    setProductSwitchesForTests({ googleSheets: true });
-    const NOT_CONNECTED = {
-      connected: false,
-      status: null,
-      email: null,
-      spreadsheetUrl: null,
-      lastErrorCode: null,
-      connectedAt: null,
-      pending: 0,
-    };
-    let status: Record<string, unknown> = {
-      ...NOT_CONNECTED,
-      tier: { active: false, name: null, servicesUsed: 0, servicesLimit: 0 },
-    };
-    cabinet((call) => {
-      if (call.path.split('?')[0] === '/api/integrations/google') return json(200, status);
-      if (call.path.startsWith('/api/integrations/google/deliveries'))
-        return json(200, { states: {} });
-      return null;
-    });
-    let view = renderRoute('/solutions/b1');
-    let note = await screen.findByTestId('google-sheet-tier');
-    expect(note).toHaveTextContent('подключается при активном тарифе');
-    expect(within(note).getByRole('link', { name: 'Тарифы' })).toHaveAttribute('href', '/pricing');
-    expect(
-      screen.getByRole('button', { name: 'Записывать заявки в Google Таблицу' }),
-    ).toBeDisabled();
-    view.unmount();
-
-    // Тариф есть, но место занято.
-    status = {
-      ...NOT_CONNECTED,
-      tier: { active: true, name: 'Start', servicesUsed: 1, servicesLimit: 1 },
-    };
-    view = renderRoute('/solutions/b1');
-    note = await screen.findByTestId('google-sheet-tier');
-    expect(note).toHaveTextContent('Внешних сервисов: 1 из 1 — тариф Start.');
-    expect(
-      screen.getByRole('button', { name: 'Записывать заявки в Google Таблицу' }),
-    ).toBeDisabled();
-    view.unmount();
-
-    // Место есть — подключить можно, без пометки.
-    status = {
-      ...NOT_CONNECTED,
-      tier: { active: true, name: 'Growth', servicesUsed: 1, servicesLimit: 2 },
-    };
-    view = renderRoute('/solutions/b1');
-    expect(
-      await screen.findByRole('button', { name: 'Записывать заявки в Google Таблицу' }),
-    ).toBeEnabled();
-    expect(screen.queryByTestId('google-sheet-tier')).toBeNull();
-    view.unmount();
-
-    // Подключено, тариф снят: заявки ждут, «Дописать пропущенные» — после продления.
-    status = {
-      ...CONNECTED,
-      pending: 2,
-      tier: { active: false, name: null, servicesUsed: 1, servicesLimit: 0 },
-    };
-    renderRoute('/solutions/b1');
-    note = await screen.findByTestId('google-sheet-tier');
-    expect(note).toHaveTextContent('Тариф не активен — заявки ждут записи');
-    expect(screen.queryByRole('button', { name: 'Дописать пропущенные (2)' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Отключить таблицу' })).toBeVisible();
   });
 
   /** Поддельный Google Picker: выбирает `pickedId` (null — закрыть окно), запоминает настройки. */

@@ -83,7 +83,7 @@ import {
   accountTiers as defaultAccountTiers,
   type AccountTiers,
 } from '../billing/account-tiers.js';
-import { TierUsage, tierEnforced } from '../billing/tier-usage.js';
+import { TierUsage } from '../billing/tier-usage.js';
 import { getDiscoveryStores } from '../discovery/runtime.js';
 import { allowanceOver, budgetAlertText } from '../billing/build-allowance.js';
 
@@ -118,8 +118,6 @@ export interface ApiDeps {
   googleSettings?: () => GoogleOAuthSettings | null;
   /** Настройки Google Picker («Выбрать прежнюю таблицу»); в тестах подменяются. */
   googlePicker?: () => GooglePickerConfig | null;
-  /** Другие подключённые внешние сервисы аккаунта для лимита тарифа (CRM, календарь — пока нет). */
-  otherExternalServices?: (userId: string) => number;
   /** Доставка заявок в Google Таблицу; в тестах — своя (обход вызывается вручную). */
   googleDelivery?: SheetsDelivery;
   /** Часовой пояс владельца для дат в Google Таблице; в тестах — в памяти. */
@@ -417,8 +415,6 @@ export function createApiRouter(deps: ApiDeps): Router {
       siteUrl,
       timeZoneOf: (userId) => activeGooglePrefs.timeZoneOf(userId),
       ownerEmail: (userId) => activeUserStore.findById(userId)?.email ?? null,
-      // Тариф снят — запись в таблицу ждёт (заявки сохраняются, уведомления владельцу идут).
-      tierActive: (userId) => !tierEnforced() || activeAccountTiers.tierOf(userId) !== null,
       mailer: ownerMailer(deps),
       telegram: {
         canNotify: (userId) => (deps.botService ?? telegramBotService).canNotifyUser(userId),
@@ -582,11 +578,6 @@ export function createApiRouter(deps: ApiDeps): Router {
       delivery: sheetsDelivery,
       leads: () => platformStores()?.builder ?? null,
       prefs: activeGooglePrefs,
-      tiers: {
-        enforced: tierEnforced,
-        tierOf: (userId) => activeAccountTiers.tierOf(userId),
-        ...(deps.otherExternalServices ? { otherServices: deps.otherExternalServices } : {}),
-      },
     }),
   );
   // Чат закрыт (product-switches.ts): диалоги остаются в базе, API отвечает 503.

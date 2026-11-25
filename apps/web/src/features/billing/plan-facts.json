@@ -341,7 +341,7 @@
         "priceUsd": 10,
         "activeSolutions": 1,
         "monthlyRequests": 1000,
-        "externalServices": 1,
+        "externalServices": 0,
         "integrationHelp": {
           "kind": "widget_install"
         }

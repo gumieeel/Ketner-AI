@@ -17,12 +17,11 @@ export interface TierFacts {
 export const TIERS = planFacts.tiers.items as TierFacts[];
 
 /**
- * Подключения к внешним сервисам — системам данных с учётными данными клиента (Google Таблицы, CRM,
- * календарь). Работают с этапа F (Google Таблицы, 23.11.2026): сайт показывает число сервисов тарифа.
- * Каналы (страница бота, виджет, Telegram-бот клиента) сервисами не считаются (решение владельца
- * 23.11.2026).
+ * Подключения к внешним сервисам с учётными данными клиента (CRM, таблицы, почта) — этап F. Пока их
+ * нет, сайт не показывает «2 / 5 / 15 внешних сервисов» как доступное сейчас: только «появятся
+ * позже». Включается вместе с этапом F.
  */
-export const EXTERNAL_SERVICES_LIVE = true;
+export const EXTERNAL_SERVICES_LIVE = false;
 export const TIER_WARN_RATE = planFacts.tiers.warnRate;
 export const TIER_GRACE_RATE = planFacts.tiers.graceRate;
 

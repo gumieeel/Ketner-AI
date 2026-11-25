@@ -189,8 +189,7 @@ test('смета: от анализа до заявки, проверки адм
     const crm = byTitle('CRM');
     assert.equal(crm.delivery.kind, 'team');
     assert.equal(crm.delivery.paidTierRequired, true);
-    // Один внешний сервис помещается в Start (решение владельца 23.11.2026).
-    assert.equal(crm.delivery.tier?.name, 'Start', 'один внешний сервис — Start');
+    assert.equal(crm.delivery.tier?.name, 'Growth', 'внешний сервис — от Growth');
     assert.ok(crm.priceKzt);
     assert.equal(byTitle('письма').delivery.kind, 'planned');
     assert.equal(byTitle('письма').priceKzt, null);

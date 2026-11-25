@@ -129,7 +129,7 @@ export const en: Record<TranslationKey, string> = {
     'A solution answering a visitor or a run on an event. Your own tests in the builder and failures on our side do not count.',
   'pricing.terms.service': 'External service',
   'pricing.terms.serviceText':
-    'A data system outside Ketner connected with your account: Google Sheets, CRM, calendar. Channels (the bot page, the button on your site, your Telegram bot) are not services and are available on every plan.',
+    'A connection to a system outside Ketner with your credentials: CRM, spreadsheets, email.',
   'pricing.teamTitle': 'Team work',
   'pricing.teamText':
     'Integrations with your systems are built by the Ketner team, on a paid plan only. The analysis report shows a preliminary estimate; the team gives an exact one after checking the task.',
@@ -2306,13 +2306,6 @@ export const en: Record<TranslationKey, string> = {
   'google.sheet.newSheetDone':
     'A new sheet was created. Press "Add missed requests" to copy them over.',
   'google.sheet.denied': 'You did not grant access to Google. The sheet is not connected.',
-  'google.sheet.tierRequired':
-    'A Google Sheet is an external service: it connects with an active plan. The Ketner team connects plans.',
-  'google.sheet.tierFull':
-    'External services: {used} of {limit} on the {tier} plan. To connect a Google Sheet, you need a higher plan, or disconnect another service.',
-  'google.sheet.tierInactive':
-    'Your plan is not active, so requests are waiting to be written. They are kept in Ketner and still reach you; when the plan is connected again, press “Add missed requests”.',
-  'google.sheet.tierLink': 'Plans',
   'google.sheet.noDriveAccess':
     'You did not give access to Google Drive. Press “Connect again” and tick access to files.',
   'google.sheet.previousLost':

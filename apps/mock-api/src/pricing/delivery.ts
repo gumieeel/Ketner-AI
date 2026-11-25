@@ -130,10 +130,10 @@ export function deliveryOf(
       : team.length > 0 || unknownWork || work.length === 0
         ? 'team'
         : 'self_service';
-  // Внешние сервисы тарифа — только системы данных (интеграции). Каналы — страница бота, виджет,
-  // Telegram, WhatsApp, Instagram — внешними сервисами не считаются (решение владельца 23.11.2026).
   const externalServices =
-    kind === 'team' ? team.filter((line) => line.category === 'integration').length : 0;
+    kind === 'team'
+      ? team.filter((line) => line.category === 'integration' || line.category === 'channel').length
+      : 0;
   const tier =
     kind === 'planned'
       ? null
