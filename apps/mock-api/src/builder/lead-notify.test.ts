@@ -1,13 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Mailer, MailMessage } from '../services/mailer.js';
-import {
-  LEGACY_LEAD_NOTIFY,
-  NEW_BOT_LEAD_NOTIFY,
-  leadNotifyOf,
-  leadTelegramText,
-  notifyLead,
-} from './lead-notify.js';
+import { newBotAutomations } from './automations.js';
+import { leadNotifyOf, leadTelegramText, notifyLead } from './lead-notify.js';
 import type { BotLead } from './types.js';
 
 const LEAD: BotLead = {
@@ -79,9 +74,11 @@ const bot = (leadNotify?: { email: boolean; telegram: boolean }) => ({
 });
 
 test('по умолчанию: у новых ботов письмо и Telegram; у ботов до шага — только письмо', () => {
-  assert.deepEqual(NEW_BOT_LEAD_NOTIFY, { email: true, telegram: true });
-  assert.deepEqual(leadNotifyOf(bot().bot), LEGACY_LEAD_NOTIFY);
-  assert.deepEqual(LEGACY_LEAD_NOTIFY, { email: true, telegram: false });
+  assert.deepEqual(leadNotifyOf({ ...bot().bot, automations: newBotAutomations() }), {
+    email: true,
+    telegram: true,
+  });
+  assert.deepEqual(leadNotifyOf(bot().bot), { email: true, telegram: false });
   assert.deepEqual(leadNotifyOf(bot({ email: false, telegram: true }).bot), {
     email: false,
     telegram: true,

@@ -11,7 +11,7 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto';
-import { NEW_BOT_LEAD_NOTIFY } from './lead-notify.js';
+import { newBotAutomations } from './automations.js';
 import type { AIGateway } from '../ai/gateway.js';
 import { AUTO_PREMIUM_MODEL_ID } from '../ai/auto-router.js';
 import {
@@ -592,8 +592,9 @@ export class BuilderService {
           quickReplies: draft.quickReplies,
           dailyCapCredits: DEFAULT_BOT_DAILY_CAP,
           corrections: [],
-          // Шаг «заявка → менеджер»: у новых ботов письмо и Telegram включены.
-          leadNotify: { ...NEW_BOT_LEAD_NOTIFY },
+          // Каталог автоматизаций: у новых ботов заявка → таблица и заявка → менеджер (письмо и
+          // Telegram) включены.
+          automations: newBotAutomations(),
         }
       : null;
     const template = isBot ? TEMPLATES.customer_bot : TEMPLATES.personal_assistant;

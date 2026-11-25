@@ -420,5 +420,9 @@ test('бот из возможности: шаг «заявка → менедж
   if (!created.ok) return;
   const saved = await store.getSolution('alice', created.solution.id);
   assert.equal(saved?.type, 'customer_bot');
-  assert.deepEqual(saved?.bot?.leadNotify, { email: true, telegram: true });
+  assert.equal(saved?.bot?.leadNotify, undefined, 'новые боты — сразу в каталоге автоматизаций');
+  assert.deepEqual(saved?.bot?.automations, {
+    lead_to_sheet: { enabled: true, version: 1 },
+    lead_to_manager: { enabled: true, version: 1, options: { email: true, telegram: true } },
+  });
 });

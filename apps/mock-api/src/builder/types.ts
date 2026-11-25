@@ -6,6 +6,7 @@
  */
 
 import type { Language } from '../types.js';
+import type { BotAutomations } from './automations.js';
 
 export type AssistantTone = 'friendly' | 'neutral' | 'formal' | 'concise';
 
@@ -61,8 +62,13 @@ export interface BotSettings {
   /** Исправленные владельцем ответы: бот отвечает так на похожие вопросы. */
   corrections: Array<{ question: string; answer: string }>;
   /**
-   * Шаг «заявка → менеджер» (builder/lead-notify.ts): куда сообщать о новой заявке. Нет поля — бот
-   * создан до шага: письмо да, Telegram нет.
+   * Переключатели шаблонов автоматизаций (builder/automations.ts). Нет поля — бот создан до
+   * каталога: состояние выводится из `leadNotify` и значений по умолчанию.
+   */
+  automations?: BotAutomations;
+  /**
+   * Старое поле шага «заявка → менеджер» (PR #80). Читается, пока нет `automations`; при первой
+   * записи настроек переносится в `automations.lead_to_manager`. Нет и его — письмо да, Telegram нет.
    */
   leadNotify?: LeadNotifySettings;
 }
