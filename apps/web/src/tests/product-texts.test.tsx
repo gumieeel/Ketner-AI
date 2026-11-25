@@ -67,11 +67,22 @@ describe('тексты о продукте', () => {
     expect(article.textContent).not.toMatch(/без подписки|в одном чате|звёзд|⭐|кредит/i);
   });
 
-  it('«Что нового»: последняя запись — заявки в Google Таблицу (шаг 5b)', () => {
+  it('«Что нового»: последняя запись — внешние сервисы в тарифах', () => {
     const [latest] = RELEASES;
-    expect(latest?.date).toBe('2026-11-23');
-    expect(latest?.title).toBe('Заявки — в вашу Google Таблицу');
+    expect(latest?.date).toBe('2026-11-25');
+    expect(latest?.title).toBe('Внешние сервисы в тарифах');
     const text = latest!.items.map((item) => item.text).join(' ');
+    expect(text).toMatch(/В тарифе Start теперь 1 внешний сервис/);
+    expect(text).toMatch(
+      /Каналы — страница бота, кнопка на сайте, ваш бот в Telegram — сервисами не считаются/,
+    );
+    expect(text).toMatch(/заявки не теряются/);
+  });
+
+  it('«Что нового»: заявки в Google Таблицу (шаг 5b)', () => {
+    const release = RELEASES.find((item) => item.date === '2026-11-23');
+    expect(release?.title).toBe('Заявки — в вашу Google Таблицу');
+    const text = release!.items.map((item) => item.text).join(' ');
     expect(text).toMatch(/«Записывать заявки в Google Таблицу»/);
     expect(text).toMatch(/Дописать пропущенные/);
     expect(text).toMatch(/Resend/);

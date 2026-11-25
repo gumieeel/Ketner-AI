@@ -39,7 +39,14 @@ import {
 export type LeadDeliveryState = 'written' | 'writing' | 'failed' | 'waiting';
 
 export type RetryResult =
-  'started' | 'retrying' | 'written' | 'in_progress' | 'limit' | 'not_found' | 'not_connected';
+  | 'started'
+  | 'retrying'
+  | 'written'
+  | 'in_progress'
+  | 'limit'
+  | 'not_found'
+  | 'not_connected'
+  | 'tier_inactive';
 
 /** Сбои, которые ждут действия владельца (подключить снова, новая таблица), а не повтора. */
 const WAITING_CODES = new Set([
@@ -51,6 +58,7 @@ const WAITING_CODES = new Set([
   'forbidden',
   'not_found',
   'trashed',
+  'tier_inactive',
 ]);
 
 export const RECONCILE_RESOLVER = 'reconcile:sheet_id_column';
@@ -81,6 +89,12 @@ export interface SheetsDeliveryDeps {
   enabled: (userId?: string) => boolean;
   /** Адрес сайта для ссылки «Диалог». */
   siteUrl: () => string;
+  /**
+   * Активен ли тариф аккаунта (решение владельца 23.11.2026). Нет — запись в таблицу ждёт с кодом
+   * `tier_inactive`, как при отозванном доступе; после продления — «Дописать пропущенные».
+   * Уведомления владельцу о заявках идут независимо (builder/lead-notify.ts). Нет функции — активен.
+   */
+  tierActive?: (userId: string) => boolean;
   /** Часовой пояс владельца (дата в таблице); нет — UTC с пометкой. */
   timeZoneOf?: (userId: string) => string | null;
   /** Письмо и Telegram владельцу: доступ отозван или таблица пропала (один раз за поломку). */
@@ -111,6 +125,10 @@ export class SheetsDelivery {
     this.fetchImpl = deps.fetchImpl ?? fetch;
     this.now = deps.now ?? Date.now;
     this.log = deps.log ?? ((message) => console.warn(message));
+  }
+
+  private tierActive(userId: string): boolean {
+    return this.deps.tierActive?.(userId) ?? true;
   }
 
   /** Работает ли доставка (для аккаунта — с учётом пилота). */
@@ -253,6 +271,11 @@ export class SheetsDelivery {
         await this.failBefore(journal, effect, { code, retry: false });
         return;
       }
+      if (!this.tierActive(effect.userId)) {
+        // Тариф не активен: запись ждёт продления, к Google не обращаемся.
+        await this.failBefore(journal, effect, { code: 'tier_inactive', retry: false });
+        return;
+      }
       const lead = await source.getLead(effect.userId, effect.leadId);
       if (!lead) {
         await this.failBefore(journal, effect, { code: 'lead_missing', retry: false });
@@ -386,7 +409,8 @@ export class SheetsDelivery {
       // Пилот: шаги аккаунтов, для которых Google Таблицы закрыты, не трогаем.
       if (!this.available(effect.userId)) continue;
       const connection = this.deps.connections.get(effect.userId);
-      const connected = connection?.status === 'connected';
+      // Тариф не активен — как поломка подключения: шаги ждут, Google не трогаем.
+      const connected = connection?.status === 'connected' && this.tierActive(effect.userId);
       try {
         if (effect.status === 'dispatched') {
           // Процесс умер после отправки: строка могла записаться.
@@ -394,7 +418,10 @@ export class SheetsDelivery {
         } else if (effect.status === 'reserved') {
           if (!connected) {
             await journal.fail(effect, {
-              code: connection?.status ?? 'disconnected',
+              code:
+                connection?.status === 'connected'
+                  ? 'tier_inactive'
+                  : (connection?.status ?? 'disconnected'),
               retry: false,
             });
           } else {
@@ -414,7 +441,11 @@ export class SheetsDelivery {
     }
     // Раз в сутки — не в корзине ли таблицы подключённых аккаунтов.
     for (const connection of this.deps.connections.list()) {
-      if (connection.status === 'connected' && this.available(connection.userId)) {
+      if (
+        connection.status === 'connected' &&
+        this.available(connection.userId) &&
+        this.tierActive(connection.userId)
+      ) {
         await this.checkTrash(connection);
       }
     }
@@ -430,6 +461,7 @@ export class SheetsDelivery {
     if (!journal || !source) return 'not_found';
     const connection = this.deps.connections.get(userId);
     if (!connection || connection.status !== 'connected') return 'not_connected';
+    if (!this.tierActive(userId)) return 'tier_inactive';
     const latest = await journal.latest(userId, leadId);
     if (!latest) {
       const lead = await source.getLead(userId, leadId);
@@ -457,6 +489,7 @@ export class SheetsDelivery {
     const journal = this.deps.journal();
     const connection = this.deps.connections.get(userId);
     if (!journal || !connection || connection.status !== 'connected') return 0;
+    if (!this.tierActive(userId)) return 0;
     if (!(await this.checkTrash(connection, 0))) return 0;
     let retried = 0;
     for (const effect of await journal.failed(userId, 500)) {

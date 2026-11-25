@@ -32,19 +32,20 @@ describe('страница «Тарифы»', () => {
     }
     const start = screen.getByTestId('tier-start');
     expect(start).toHaveTextContent('1 активное решение');
-    expect(start).toHaveTextContent('Без внешних сервисов');
+    // Решение владельца 23.11.2026: у Start — 1 внешний сервис (Google Таблицы работают).
+    expect(start).toHaveTextContent('1 внешний сервис');
     expect(start).toHaveTextContent('Установка кнопки на сайт командой Ketner');
     const growth = screen.getByTestId('tier-growth');
     expect(growth).toHaveTextContent('3 активных решения');
-    // Подключений к внешним сервисам ещё нет (этап F): число — только как «появятся позже».
-    expect(growth).toHaveTextContent('Подключения к внешним сервисам (до 2) — появятся позже');
-    expect(growth).not.toHaveTextContent('2 внешних сервиса');
+    expect(growth).toHaveTextContent('2 внешних сервиса');
     expect(growth).toHaveTextContent('2 ч помощи с подключением в месяц');
-    expect(screen.getByTestId('tier-business')).toHaveTextContent(
-      'Подключения к внешним сервисам (до 5) — появятся позже',
+    expect(screen.getByTestId('tier-business')).toHaveTextContent('5 внешних сервисов');
+    expect(screen.getByTestId('tier-scale')).toHaveTextContent('15 внешних сервисов');
+    expect(document.body.textContent).not.toMatch(/появятся позже/);
+    // Каналы — не внешние сервисы.
+    expect(document.body.textContent).toMatch(
+      /Каналы — страница бота, кнопка на сайте, ваш бот в Telegram — сервисами не считаются/,
     );
-    expect(document.body.textContent).not.toMatch(/\d+ внешн(ий|их) сервис/);
-    expect(document.body.textContent).toMatch(/Таких подключений пока нет — они появятся позже/);
   });
 
   it('бесплатно — анализ, создание и проверка; правила объёма — из каталога тарифов', () => {

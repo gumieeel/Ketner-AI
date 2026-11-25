@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import {
@@ -156,6 +157,26 @@ export function GoogleSheetCard({
     ) : null;
 
   const state = status?.status ?? null;
+  // Тариф (решение владельца 23.11.2026): подключить можно при активном тарифе со свободным местом;
+  // тариф снят — запись ждёт.
+  const tier = status?.tier ?? null;
+  const tierBlocksConnect = Boolean(
+    tier && (!tier.active || tier.servicesUsed >= tier.servicesLimit),
+  );
+  const tierNote = tier
+    ? !tier.active
+      ? t('google.sheet.tierRequired')
+      : t('google.sheet.tierFull', {
+          used: String(tier.servicesUsed),
+          limit: String(tier.servicesLimit),
+          tier: tier.name ?? '',
+        })
+    : null;
+  const tierLink = (
+    <Link to="/pricing" className="text-accent underline-offset-4 hover:underline">
+      {t('google.sheet.tierLink')}
+    </Link>
+  );
   // Таблица, которую Ketner больше не может открыть: сохранённая при переподключении или текущая,
   // если Google ответил «не найдено» (удалена навсегда или доступ закрыт).
   const lostUrl =
@@ -179,7 +200,17 @@ export function GoogleSheetCard({
       {status && (state === null || state === 'disconnected') ? (
         <>
           <p className="mt-1 text-[14px] leading-6 text-muted">{t('google.sheet.offer')}</p>
-          <Button className="mt-3" size="sm" disabled={busy} onClick={() => void connect()}>
+          {tierBlocksConnect && tierNote ? (
+            <p className="mt-2 text-[14px] leading-6 text-text" data-testid="google-sheet-tier">
+              {tierNote} {tierLink}
+            </p>
+          ) : null}
+          <Button
+            className="mt-3"
+            size="sm"
+            disabled={busy || tierBlocksConnect}
+            onClick={() => void connect()}
+          >
             {t('google.sheet.connect')}
           </Button>
         </>
@@ -217,6 +248,18 @@ export function GoogleSheetCard({
         </div>
       ) : null}
 
+      {state === 'connected' && tier && !tier.active ? (
+        <div
+          role="status"
+          className="mt-2 rounded-lg bg-warning-soft px-4 py-3"
+          data-testid="google-sheet-tier"
+        >
+          <p className="text-[14px] leading-6 text-text">
+            {t('google.sheet.tierInactive')} {tierLink}
+          </p>
+        </div>
+      ) : null}
+
       {state === 'connected' ? (
         <>
           <p className="mt-1 text-[14px] leading-6 text-muted">
@@ -235,7 +278,7 @@ export function GoogleSheetCard({
                 {t('google.sheet.open')}
               </a>
             ) : null}
-            {pending > 0 ? (
+            {pending > 0 && !(tier && !tier.active) ? (
               <Button
                 size="sm"
                 variant="secondary"

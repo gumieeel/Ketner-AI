@@ -21,6 +21,16 @@ export interface GoogleSheetStatus {
   previousSheetUrl?: string | null;
   /** Есть ли кнопка «Выбрать прежнюю таблицу» (на сервере настроен Google Picker). */
   picker?: boolean;
+  /**
+   * Тариф для внешних сервисов: активен ли и сколько мест; `null` — тарифы не проверяются (или старый
+   * сервер).
+   */
+  tier?: {
+    active: boolean;
+    name: string | null;
+    servicesUsed: number;
+    servicesLimit: number;
+  } | null;
 }
 
 /** Для Google Picker: короткий access-токен, ключ API и номер проекта. */

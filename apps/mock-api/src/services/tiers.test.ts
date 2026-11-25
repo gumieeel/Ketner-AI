@@ -24,7 +24,8 @@ test('каталог: утверждённые цены, объёмы и пом�
       tier.externalServices,
     ]),
     [
-      ['start', 10, 1, 1_000, 0],
+      // Start: 1 внешний сервис — решение владельца 23.11.2026 (было 0).
+      ['start', 10, 1, 1_000, 1],
       ['growth', 29, 3, 5_000, 2],
       ['business', 89, 10, 20_000, 5],
       ['scale', 235, 25, 60_000, 15],
@@ -92,6 +93,10 @@ test('смета: наименьший тариф, покрывающий все
   );
   assert.equal(
     tierFor({ activeSolutions: 1, monthlyRequests: 100, externalServices: 1 })?.id,
+    'start',
+  );
+  assert.equal(
+    tierFor({ activeSolutions: 1, monthlyRequests: 100, externalServices: 2 })?.id,
     'growth',
   );
   assert.equal(
@@ -111,7 +116,8 @@ test('маржа воспроизводит таблицу раздела 2.3 д
     string,
     { card: [number, number, number]; crypto: [number, number, number] }
   > = {
-    start: { card: [6.04, 5.19, 4.67], crypto: [6.79, 5.95, 5.42] },
+    // Start: 1 внешний сервис с 23.11.2026 (+$2 инфраструктуры).
+    start: { card: [4.04, 3.19, 2.67], crypto: [4.79, 3.95, 3.42] },
     growth: { card: [16.14, 11.92, 9.28], crypto: [17.6, 13.38, 10.75] },
     business: { card: [53.32, 36.44, 25.89], crypto: [57.05, 40.17, 29.62] },
     scale: { card: [137.95, 87.31, 55.66], crypto: [147.16, 96.52, 64.87] },
@@ -126,10 +132,13 @@ test('маржа воспроизводит таблицу раздела 2.3 д
   }
 });
 
-test('маржа: при замеренной цене не меньше половины цены, в худшем случае — положительная', () => {
+test('маржа: при замеренной цене не меньше половины цены (Start — 40%), в худшем случае — положительная', () => {
   for (const tier of TIERS) {
     const measured = tierMargin(tier, 'card', 0.0004).marginUsd;
-    assert.ok(measured / tier.priceUsd >= 0.5, `${tier.id}: ${measured}`);
+    // Start с 1 внешним сервисом (решение владельца 23.11.2026): $2 инфраструктуры на сервис
+    // снижают маржу до 40% при замеренной цене — принято осознанно, проверяем, что не ниже.
+    const floor = tier.id === 'start' ? 0.4 : 0.5;
+    assert.ok(measured / tier.priceUsd >= floor, `${tier.id}: ${measured}`);
     const worst = tierMargin(tier, 'card', 0.0017).marginUsd;
     // Худший случай — ещё и весь бесплатный лимит создания (раздел 4).
     assert.ok(worst - tier.buildAllowanceCredits / 1000 > 0, `${tier.id}: ${worst}`);

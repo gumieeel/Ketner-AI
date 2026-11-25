@@ -29,6 +29,8 @@ import type { GoogleVerifierStore } from '../google/verifier-store.js';
 import type { PickSheetResult, SheetsDelivery } from '../google/delivery.js';
 import type { GooglePrefsStore } from '../google/prefs.js';
 import type { BuilderStore } from '../builder/store.js';
+import { checkServiceConnect } from '../billing/external-services.js';
+import { tierById, type TierId } from '../services/tiers.js';
 
 export interface GoogleIntegrationRouterDeps {
   store: GoogleConnectionStore;
@@ -45,6 +47,16 @@ export interface GoogleIntegrationRouterDeps {
   leads?: () => Pick<BuilderStore, 'listLeads'> | null;
   /** Часовой пояс владельца: браузер присылает его при подключении и открытии кабинета. */
   prefs?: GooglePrefsStore;
+  /**
+   * Тариф аккаунта (billing/external-services.ts): подключение внешнего сервиса — только при
+   * активном тарифе со свободным местом. Нет или `enforced()` ложно — проверок нет.
+   */
+  tiers?: {
+    enforced: () => boolean;
+    tierOf: (userId: string) => TierId | null;
+    /** Другие подключённые внешние сервисы аккаунта (CRM, календарь — пока нет). */
+    otherServices?: (userId: string) => number;
+  };
 }
 
 /** Почему выбранный файл не подошёл — текст для владельца. */
@@ -123,6 +135,7 @@ export function createGoogleIntegrationRouter({
   delivery,
   leads,
   prefs,
+  tiers,
 }: GoogleIntegrationRouterDeps): Router {
   const settings = injected ?? googleOAuthSettings;
   const pickerConfig = injectedPicker ?? googlePickerConfig;
@@ -130,6 +143,56 @@ export function createGoogleIntegrationRouter({
    * Состояние для карточки: подключение, прежняя таблица, которую Ketner больше не может открыть
    * (ссылка), и есть ли кнопка «Выбрать прежнюю таблицу» (настроен Google Picker).
    */
+  /** Подключённых внешних сервисов у аккаунта. Сейчас внешний сервис один — Google Таблицы. */
+  const googleUsed = (userId: string) => {
+    const connection = store.get(userId);
+    return connection && connection.status !== 'disconnected' ? 1 : 0;
+  };
+  const servicesUsed = (userId: string) =>
+    googleUsed(userId) + (tiers?.otherServices?.(userId) ?? 0);
+  /** Тариф для карточки: активен ли и сколько мест под внешние сервисы; без проверок — null. */
+  const tierView = (userId: string) => {
+    if (!tiers?.enforced()) return null;
+    const tier = tiers.tierOf(userId);
+    return {
+      active: tier !== null,
+      name: tier ? tierById(tier).name : null,
+      servicesUsed: servicesUsed(userId),
+      servicesLimit: tier ? tierById(tier).externalServices : 0,
+    };
+  };
+  /**
+   * Отказ по тарифу (403): нет активного тарифа или нет места под ещё один сервис. `alreadyConnected`
+   * — этот сервис уже подключён (повторное согласие, выбор прежней таблицы): место не нужно.
+   */
+  const refusedByTier = (userId: string, response: Response, alreadyConnected: boolean) => {
+    if (!tiers?.enforced()) return false;
+    const check = checkServiceConnect({
+      tier: tiers.tierOf(userId),
+      used: servicesUsed(userId),
+      alreadyConnected,
+    });
+    if (check.ok) return false;
+    response.status(403).json({
+      error: {
+        code: check.code,
+        message: check.message,
+        details:
+          check.code === 'service_limit'
+            ? {
+                used: check.used,
+                limit: check.limit,
+                tier: check.tier,
+                nextTier: check.nextTier,
+                pricingUrl: '/pricing',
+              }
+            : { pricingUrl: '/pricing' },
+      },
+    });
+    return true;
+  };
+  /** Этот аккаунт уже подключил Google (не отключал): переподключение места не занимает. */
+  const connected = (userId: string) => googleUsed(userId) > 0;
   const cardStatus = (userId: string, connection = store.get(userId)) => {
     const active = Boolean(connection && connection.status !== 'disconnected');
     const lost = active ? (prefs?.lostSheetOf(userId) ?? null) : null;
@@ -137,6 +200,7 @@ export function createGoogleIntegrationRouter({
       ...publicStatus(connection),
       previousSheetUrl: lost?.url ?? null,
       picker: active && Boolean(delivery) && pickerConfig() !== null,
+      tier: tierView(userId),
     };
   };
   const fetchImpl = injectedFetch ?? fetch;
@@ -198,6 +262,7 @@ export function createGoogleIntegrationRouter({
         sendError(response, 404, 'not_found', 'Заявка не найдена');
         return;
       }
+      if (refusedByTier(userId, response, true)) return;
       const result = await delivery.retryLead(userId, leadId);
       if (result === 'not_found') {
         sendError(response, 404, 'not_found', 'Заявка не найдена');
@@ -230,6 +295,7 @@ export function createGoogleIntegrationRouter({
       sendError(response, 409, 'google_not_connected', 'Сначала подключите Google Таблицу.');
       return;
     }
+    if (refusedByTier(userId, response, true)) return;
     const retried = await delivery.backfill(userId);
     response.json({
       retried,
@@ -257,6 +323,7 @@ export function createGoogleIntegrationRouter({
       sendError(response, 409, 'google_not_connected', 'Сначала подключите Google Таблицу.');
       return;
     }
+    if (refusedByTier(userId, response, true)) return;
     try {
       prefs?.rememberTimeZone(
         userId,
@@ -283,6 +350,8 @@ export function createGoogleIntegrationRouter({
     const oauth = settings()!;
     const body = (request.body ?? {}) as { returnTo?: unknown; timeZone?: unknown };
     prefs?.rememberTimeZone(request.user!.id, body.timeZone);
+    // Тариф и место — до перехода в Google: без них подключение не начинается.
+    if (refusedByTier(request.user!.id, response, connected(request.user!.id))) return;
     const returnTo = safeReturnTo(body.returnTo) ?? fallbackReturnTo();
     const { state, nonce, expiresAt } = createGoogleState(request.user!.id, returnTo);
     const verifier = createCodeVerifier();
@@ -338,6 +407,9 @@ export function createGoogleIntegrationRouter({
       );
       return;
     }
+
+    // Тариф могли снять, а место — занять, пока человек был в Google: проверка до обмена кода.
+    if (refusedByTier(userId, response, connected(userId))) return;
 
     let grant;
     try {
@@ -442,6 +514,7 @@ export function createGoogleIntegrationRouter({
       sendError(response, 409, 'google_not_connected', 'Сначала подключите Google Таблицу.');
       return;
     }
+    if (refusedByTier(userId, response, true)) return;
     try {
       const accessToken = await delivery.pickerToken(userId);
       googleDiagnostics.log('выбор таблицы: выдан токен для Google Picker');
@@ -469,6 +542,7 @@ export function createGoogleIntegrationRouter({
       sendError(response, 400, 'invalid_request', 'Не удалось прочитать выбранный файл.');
       return;
     }
+    if (refusedByTier(userId, response, true)) return;
     const picked = await delivery.pickSheet(userId, spreadsheetId);
     googleDiagnostics.log(`выбор таблицы: ${picked.result}`);
     if (picked.result === 'ok') {
