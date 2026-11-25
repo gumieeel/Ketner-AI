@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { BotLead, Solution } from '../builder/types.js';
+import type { BotLead, BotSettings, Solution } from '../builder/types.js';
 import { setProductSwitchForTests } from '../product-switches.js';
 import {
   DRIVE_FILE,
@@ -36,6 +36,8 @@ async function harness(
     connect?: boolean;
     enabled?: boolean | ((userId?: string) => boolean);
     timeZone?: string;
+    /** Настройки бота заявки (переключатели автоматизаций). */
+    bot?: Partial<BotSettings>;
   } = {},
 ): Promise<Harness> {
   const clock = { now: Date.parse('2026-11-21T12:00:00Z') };
@@ -43,7 +45,12 @@ async function harness(
   const journal = new MemoryDeliveryJournal(() => clock.now);
   const connections = createGoogleConnectionStore({ secret: 'delivery-test' });
   const leads = new Map<string, BotLead>();
-  const solution = { id: 'sol-1', ownerId: OWNER, name: 'Бот кофейни' } as Solution;
+  const solution = {
+    id: 'sol-1',
+    ownerId: OWNER,
+    name: 'Бот кофейни',
+    ...(options.bot ? { bot: options.bot } : {}),
+  } as Solution;
   const logs: string[] = [];
   const notified: Array<[string, string]> = [];
   const delivery = new SheetsDelivery({
@@ -336,6 +343,26 @@ test('нет подключения, отключено или переключ�
   await closed.lead('lead-1');
   assert.equal(closed.journal.executions.size, 0);
   assert.equal(await closed.delivery.sweep(), 0);
+});
+
+test('шаблон «заявка → таблица» выключен у бота: шага нет, дописывать нечего; включён — пишет', async () => {
+  const off = await harness({
+    bot: { automations: { lead_to_sheet: { enabled: false, version: 1 } } },
+  });
+  await off.lead('lead-1');
+  assert.equal(off.journal.executions.size, 0);
+  assert.equal(off.google.appendRequests.length, 0);
+  assert.equal(await off.delivery.pending(OWNER), 0);
+  assert.equal(await off.delivery.backfill(OWNER), 0);
+  assert.ok(
+    off.logs.includes('[sheets] заявка lead-1: запись в таблицу выключена в настройках бота'),
+  );
+
+  const on = await harness({
+    bot: { automations: { lead_to_sheet: { enabled: true, version: 1 } } },
+  });
+  await on.lead('lead-1');
+  assert.equal(on.google.appendRequests.length, 1);
 });
 
 test('тексты уведомлений о поломке: без данных заявок, со ссылкой на кабинет', () => {

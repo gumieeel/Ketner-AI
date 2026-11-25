@@ -1,8 +1,8 @@
 /**
  * Шаг автоматизации «заявка → менеджер»: уведомление владельцу бота о новой заявке по почте и в
- * Telegram (бот Ketner, которому владелец привязал аккаунт). Настройка у каждого бота
- * (`BotSettings.leadNotify`); риск — действие `owner.notify` из platform/risk.ts (внутреннее,
- * одному получателю, обычное).
+ * Telegram (бот Ketner, которому владелец привязал аккаунт). Настройка у каждого бота — шаблон
+ * `lead_to_manager` каталога builder/automations.ts (старое поле `BotSettings.leadNotify` читается);
+ * риск — действие `owner.notify` из platform/risk.ts (внутреннее, одному получателю, обычное).
  *
  * Значения по умолчанию:
  * - новые боты — оба канала включены (решение владельца 23.11.2026);
@@ -15,16 +15,14 @@
  */
 
 import type { Mailer } from '../services/mailer.js';
+import { leadNotifyChannels } from './automations.js';
 import type { BotLead, BotSettings, LeadNotifySettings, Solution } from './types.js';
 
-export const NEW_BOT_LEAD_NOTIFY: LeadNotifySettings = { email: true, telegram: true };
-/** Боты, созданные до шага: как раньше — только письмо. */
-export const LEGACY_LEAD_NOTIFY: LeadNotifySettings = { email: true, telegram: false };
-
-export function leadNotifyOf(bot: Pick<BotSettings, 'leadNotify'> | null | undefined) {
-  const value = bot?.leadNotify;
-  if (!value) return { ...LEGACY_LEAD_NOTIFY };
-  return { email: value.email === true, telegram: value.telegram === true };
+/** Каналы уведомления бота: выключенный шаблон — оба канала выключены. */
+export function leadNotifyOf(
+  bot: Pick<BotSettings, 'automations' | 'leadNotify'> | null | undefined,
+): LeadNotifySettings {
+  return leadNotifyChannels(bot);
 }
 
 export interface LeadNotifyChannels {

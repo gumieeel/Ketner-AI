@@ -13,6 +13,7 @@
  * В журнал и лог — только коды и id, без данных заявки и токенов.
  */
 
+import { automationsOf } from '../builder/automations.js';
 import type { BotLead, Solution } from '../builder/types.js';
 import type { GoogleConnection, GoogleConnectionStore } from './connection-store.js';
 import {
@@ -218,6 +219,13 @@ export class SheetsDelivery {
     const connection = this.deps.connections.get(lead.ownerId);
     if (!journal || !connection || connection.status === 'disconnected') return;
     try {
+      // Шаблон «заявка → таблица» выключен у этого бота: шаг не начинается, записи в журнале нет,
+      // и «Дописать пропущенные» такую заявку не дописывает.
+      const solution = await this.deps.leads()?.getSolution(lead.ownerId, lead.solutionId);
+      if (solution && !automationsOf(solution.bot).lead_to_sheet.enabled) {
+        this.log(`[sheets] заявка ${lead.id}: запись в таблицу выключена в настройках бота`);
+        return;
+      }
       const { created, effect } = await journal.start({
         userId: lead.ownerId,
         solutionId: lead.solutionId,

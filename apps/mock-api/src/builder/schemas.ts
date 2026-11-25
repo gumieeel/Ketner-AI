@@ -146,6 +146,12 @@ export type JudgeOutput = z.infer<typeof judgeOutputSchema>;
 /** Анонимный id посетителя страницы бота: создаёт его браузер, хранится там же. */
 export const VISITOR_ID = /^v_[a-z0-9]{12,40}$/;
 
+/** Переключатель шаблона: `confirmed` — подтверждение владельца для шаблона с одобрением. */
+const automationToggle = z
+  .object({ enabled: z.boolean(), confirmed: z.boolean() })
+  .partial()
+  .strict();
+
 export const botSettingsBodySchema = z
   .object({
     slug: z.string().trim().toLowerCase().min(3).max(40),
@@ -161,6 +167,21 @@ export const botSettingsBodySchema = z
       )
       .max(30),
     leadNotify: z.object({ email: z.boolean(), telegram: z.boolean() }).strict(),
+    // Переключатели каталога автоматизаций (builder/automations.ts).
+    automations: z
+      .object({
+        lead_to_sheet: automationToggle,
+        lead_to_manager: automationToggle.extend({
+          options: z
+            .object({ email: z.boolean(), telegram: z.boolean() })
+            .partial()
+            .strict()
+            .optional(),
+        }),
+        daily_lead_summary: automationToggle,
+      })
+      .partial()
+      .strict(),
   })
   .partial();
 

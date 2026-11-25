@@ -197,3 +197,75 @@ test('кабинет: переключатели сохраняются и де�
   // Telegram включён, но не привязан — не отправлено (причина в логе), заявка сохранена.
   assert.equal(telegram.sent.length, 0);
 });
+
+test('каталог автоматизаций: обзор, переключатели, перенос leadNotify, недоступный шаблон', async (t) => {
+  const { server, mails, telegram, logs } = await setup(t);
+  const owner = await signupOwner(server);
+  const id = await publishedBot(owner, 'lisa-notify-d', { email: true, telegram: true });
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${owner.token}` };
+  const url = `${server.baseUrl}/api/solutions/${id}/bot`;
+
+  type Overview = {
+    settings: Record<string, unknown> & { leadNotify: { email: boolean; telegram: boolean } };
+    automations: Array<{ id: string; enabled: boolean; available: boolean; risk: string }>;
+  };
+  const before = await readJson<Overview>(await fetch(url, { headers }));
+  assert.deepEqual(
+    before.automations.map((item) => [item.id, item.enabled, item.available, item.risk]),
+    [
+      ['lead_to_sheet', true, true, 'low'],
+      ['lead_to_manager', true, true, 'low'],
+      ['daily_lead_summary', false, false, 'low'],
+    ],
+  );
+  assert.ok(!('automations' in before.settings), 'форма настроек не получает переключатели');
+
+  // Сохранение любой настройки переносит leadNotify в automations.
+  const greeting = await fetch(url, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ greeting: 'Добрый день!' }),
+  });
+  assert.equal(greeting.status, 200, await greeting.clone().text());
+  const stored = await getDiscoveryStores()!.builder.getSolution(owner.user.id, id);
+  assert.equal(stored?.bot?.leadNotify, undefined);
+  assert.deepEqual(stored?.bot?.automations?.lead_to_manager, {
+    enabled: true,
+    version: 1,
+    options: { email: true, telegram: true },
+  });
+
+  // Сводка за день: нужен планировщик — отказ с причиной.
+  const summary = await fetch(url, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ automations: { daily_lead_summary: { enabled: true } } }),
+  });
+  assert.equal(summary.status, 409);
+  assert.match(JSON.stringify(await summary.json()), /automation_unavailable/);
+
+  // Неизвестный шаблон — 400.
+  const unknown = await fetch(url, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ automations: { lead_to_crm: { enabled: true } } }),
+  });
+  assert.equal(unknown.status, 400);
+
+  // Выключить «заявка → менеджер»: уведомлений нет, заявка сохраняется.
+  const off = await fetch(url, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ automations: { lead_to_manager: { enabled: false } } }),
+  });
+  assert.equal(off.status, 200, await off.clone().text());
+  assert.deepEqual((await readJson<Overview>(off)).settings.leadNotify, {
+    email: false,
+    telegram: false,
+  });
+  await leaveLead(server, 'lisa-notify-d');
+  await until(() => lines(logs).length === 2);
+  assert.ok(lines(logs).every((line) => line.endsWith('— выключено в настройках бота')));
+  assert.equal(mails.filter((message) => message.subject.startsWith('Новая заявка')).length, 0);
+  assert.equal(telegram.sent.length, 0);
+});

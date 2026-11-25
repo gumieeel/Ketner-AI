@@ -13,6 +13,12 @@
 
 import { randomUUID } from 'node:crypto';
 import { leadNotifyOf } from './lead-notify.js';
+import {
+  applyAutomationsPatch,
+  automationsView,
+  AUTOMATION_TEMPLATES,
+  type AutomationsPatch,
+} from './automations.js';
 import { toCredits } from '../services/entitlement.js';
 import type { Language, PlanId } from '../types.js';
 import { buildBotInstructions, parseBotReply, SLUG_PATTERN } from './bot-prompt.js';
@@ -514,9 +520,12 @@ export class BotService {
     if (!solution?.bot) return null;
     const usage = await this.deps.store.botUsageSince(solution.id, dayStart(this.now()));
     return {
-      // Шаг «заявка → менеджер»: значения по умолчанию разрешены для ботов, созданных до шага.
-      settings: { ...solution.bot, leadNotify: leadNotifyOf(solution.bot) },
+      // Шаг «заявка → менеджер»: каналы — из каталога автоматизаций или старого `leadNotify`.
+      // Переключатели каталога — отдельным полем, не в `settings`: форма настроек отправляет
+      // `settings` обратно целиком и не должна затирать ими переключатели.
+      settings: { ...settingsOnly(solution.bot), leadNotify: leadNotifyOf(solution.bot) },
       leadNotify: { telegramLinked: this.deps.telegramLinked?.(ownerId) ?? false },
+      automations: automationsView(solution.bot),
       today: {
         replies: usage.replies,
         credits: toCredits(usage.creditsUsd),
@@ -532,12 +541,20 @@ export class BotService {
   async updateSettings(
     caller: BuilderCaller,
     id: string,
-    patch: Partial<BotSettings>,
+    patch: BotSettingsPatch,
   ): Promise<Ok<{ settings: BotSettings }> | BotError> {
+    const { automations: automationsPatch, leadNotify, ...rest } = patch;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const solution = await this.ownBot(caller.userId, id);
       if (!solution?.bot) return notFound();
-      const next: BotSettings = { ...solution.bot, ...patch };
+      // Переключатели — всегда в новом виде: старое `leadNotify` переносится при любой записи.
+      const automations = applyAutomationsPatch(solution.bot, {
+        ...(automationsPatch ? { automations: automationsPatch } : {}),
+        ...(leadNotify ? { leadNotify } : {}),
+      });
+      if (!automations.ok) return automationRefusal(caller.language, automations);
+      const { leadNotify: _migrated, ...kept } = solution.bot;
+      const next: BotSettings = { ...kept, ...rest, automations: automations.automations };
       if (next.slug !== solution.bot.slug) {
         if (!SLUG_PATTERN.test(next.slug)) {
           return {
@@ -675,4 +692,57 @@ export class BotService {
 
 function notFound(): BotError {
   return { ok: false, status: 404, code: 'bot_not_found', message: 'Бот не найден' };
+}
+
+/** Изменение настроек бота из запроса владельца. */
+export type BotSettingsPatch = Partial<Omit<BotSettings, 'automations'>> & {
+  automations?: AutomationsPatch;
+};
+
+/** Настройки бота без переключателей автоматизаций (они в overview отдельным полем). */
+function settingsOnly(bot: BotSettings): Omit<BotSettings, 'automations'> {
+  const { automations: _own, ...rest } = bot;
+  return rest;
+}
+
+function automationRefusal(
+  language: Language,
+  refusal: { code: string; template: keyof typeof AUTOMATION_TEMPLATES },
+): BotError {
+  const title = AUTOMATION_TEMPLATES[refusal.template].title[language];
+  if (refusal.code === 'automation_unavailable') {
+    const note = AUTOMATION_TEMPLATES[refusal.template].unavailableNote?.[language] ?? '';
+    return {
+      ok: false,
+      status: 409,
+      code: refusal.code,
+      message: text(
+        language,
+        `«${title}» пока не включается. ${note}`.trim(),
+        `"${title}" cannot be turned on yet. ${note}`.trim(),
+      ),
+    };
+  }
+  if (refusal.code === 'automation_needs_confirmation') {
+    return {
+      ok: false,
+      status: 409,
+      code: refusal.code,
+      message: text(
+        language,
+        `«${title}» включается только с вашим подтверждением.`,
+        `"${title}" is turned on only with your confirmation.`,
+      ),
+    };
+  }
+  return {
+    ok: false,
+    status: 403,
+    code: refusal.code,
+    message: text(
+      language,
+      `«${title}» нельзя включить: такие действия Ketner не выполняет.`,
+      `"${title}" cannot be turned on: Ketner does not perform such actions.`,
+    ),
+  };
 }
