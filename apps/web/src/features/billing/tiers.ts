@@ -19,10 +19,16 @@ export const TIERS = planFacts.tiers.items as TierFacts[];
 /**
  * Подключения к внешним сервисам — системам данных с учётными данными клиента (Google Таблицы, CRM,
  * календарь). Работают с этапа F (Google Таблицы, 23.11.2026): сайт показывает число сервисов тарифа.
- * Каналы (страница бота, виджет, Telegram-бот клиента) сервисами не считаются (решение владельца
- * 23.11.2026).
+ * Каналы (страница бота, виджет, позже — Telegram-бот клиента) сервисами не считаются (решение
+ * владельца 23.11.2026).
  */
 export const EXTERNAL_SERVICES_LIVE = true;
+
+/**
+ * Канал «ваш бот в Telegram» (docs/TELEGRAM_CHANNEL.md) ещё не сделан. Пока false, тексты сайта
+ * называют его «позже» — это проверяет tests/product-texts.test.tsx.
+ */
+export const CUSTOMER_TELEGRAM_CHANNEL_LIVE = false;
 export const TIER_WARN_RATE = planFacts.tiers.warnRate;
 export const TIER_GRACE_RATE = planFacts.tiers.graceRate;
 

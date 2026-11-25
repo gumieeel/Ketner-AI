@@ -129,7 +129,7 @@ export const en: Record<TranslationKey, string> = {
     'A solution answering a visitor or a run on an event. Your own tests in the builder and failures on our side do not count.',
   'pricing.terms.service': 'External service',
   'pricing.terms.serviceText':
-    'A data system outside Ketner connected with your account: Google Sheets, CRM, calendar. Channels (the bot page, the button on your site, your Telegram bot) are not services and are available on every plan.',
+    'A data system outside Ketner connected with your account: Google Sheets, CRM, calendar. Channels (the bot page, the button on your site and, later, your Telegram bot) are not services and are available on every plan.',
   'pricing.teamTitle': 'Team work',
   'pricing.teamText':
     'Integrations with your systems are built by the Ketner team, on a paid plan only. The analysis report shows a preliminary estimate; the team gives an exact one after checking the task.',
@@ -2311,7 +2311,7 @@ export const en: Record<TranslationKey, string> = {
   'google.sheet.tierFull':
     'External services: {used} of {limit} on the {tier} plan. To connect a Google Sheet, you need a higher plan, or disconnect another service.',
   'google.sheet.tierInactive':
-    'Your plan is not active, so requests are waiting to be written. They are kept in Ketner and still reach you; when the plan is connected again, press “Add missed requests”.',
+    'Your plan is not active, so requests are waiting to be written. They are kept in Ketner and still reach you; when the plan is connected again, they will be added to the sheet automatically.',
   'google.sheet.tierLink': 'Plans',
   'google.sheet.noDriveAccess':
     'You did not give access to Google Drive. Press “Connect again” and tick access to files.',

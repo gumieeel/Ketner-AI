@@ -10,7 +10,12 @@ import {
 } from '../testing/fake-google.js';
 import { createGoogleConnectionStore, type GoogleConnectionStore } from './connection-store.js';
 import { RETRY_PAUSES_MS, MemoryDeliveryJournal } from './delivery-journal.js';
-import { RECONCILE_RESOLVER, SheetsDelivery, TRASH_BEFORE_WRITE_MS } from './delivery.js';
+import {
+  RECONCILE_RESOLVER,
+  SheetsDelivery,
+  TIER_RESUME_PER_SWEEP,
+  TRASH_BEFORE_WRITE_MS,
+} from './delivery.js';
 import { brokenConnectionText } from './delivery-runtime.js';
 import { LEAD_SHEET_COLUMNS } from './sheets.js';
 
@@ -459,8 +464,53 @@ test('тариф снят: запись ждёт (tier_inactive), Google не т
   assert.equal(h.connections.get(OWNER)?.status, 'connected');
   assert.deepEqual(h.notified, []);
 
+  // Продлили: кнопка «Дописать пропущенные» работает как раньше.
   tier.active = true;
   assert.equal(await h.delivery.backfill(OWNER), 1);
   assert.equal(h.google.rows.get(SHEET)?.length, 2);
   assert.deepEqual(await h.delivery.states(OWNER, ['lead-2']), { 'lead-2': 'written' });
+});
+
+test('тариф продлили: обход сам дописывает заявки, ждавшие тариф, — не больше 20 за обход', async () => {
+  const tier = { active: false };
+  const h = await harness({ tier });
+  for (let i = 1; i <= 25; i += 1) await h.lead(`lead-${i}`);
+  assert.equal(h.google.appendRequests.length, 0);
+  assert.equal(await h.delivery.pending(OWNER), 25);
+  // Пока тариф не активен, обход ничего не дописывает.
+  later(h, 60_000);
+  await h.delivery.sweep();
+  assert.equal(h.google.appendRequests.length, 0);
+
+  tier.active = true;
+  later(h, 60_000);
+  await h.delivery.sweep();
+  assert.equal(h.google.rows.get(SHEET)?.length, TIER_RESUME_PER_SWEEP);
+  assert.ok(h.logs.includes('[sheets] обход: после продления тарифа дописано заявок: 20'));
+  later(h, 60_000);
+  await h.delivery.sweep();
+  assert.equal(h.google.rows.get(SHEET)?.length, 25);
+  assert.equal(await h.delivery.pending(OWNER), 0);
+  // Строк не больше, чем заявок: следующий обход ничего не повторяет.
+  later(h, 60_000);
+  await h.delivery.sweep();
+  assert.equal(h.google.appendRequests.length, 25);
+});
+
+test('после продления обход дописывает только tier_inactive: другие отказы ждут кнопку владельца', async () => {
+  const tier = { active: true };
+  const h = await harness({ tier });
+  h.google.appendStatus = 400;
+  await h.lead('lead-1');
+  assert.notEqual((await h.journal.latest(OWNER, 'lead-1'))?.resultMeta.code, 'tier_inactive');
+  h.google.appendStatus = 200;
+  tier.active = false;
+  await h.lead('lead-2');
+  tier.active = true;
+  later(h, 60_000);
+  await h.delivery.sweep();
+  assert.deepEqual(await h.delivery.states(OWNER, ['lead-1', 'lead-2']), {
+    'lead-1': 'failed',
+    'lead-2': 'written',
+  });
 });
