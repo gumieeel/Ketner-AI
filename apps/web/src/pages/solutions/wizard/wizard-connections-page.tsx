@@ -10,7 +10,7 @@ import {
   type BotOverview,
   type SolutionDetails,
 } from '@/features/builder/api';
-import { wizardSetupPath, wizardStartPath } from '@/features/builder/wizard';
+import { wizardLaunchPath, wizardSetupPath, wizardStartPath } from '@/features/builder/wizard';
 import { DiscoveryApiError } from '@/features/discovery/api';
 import { useTranslation } from '@/i18n';
 import { ErrorNotice } from '@/pages/analysis/error-notice';
@@ -252,12 +252,11 @@ function ConnectionsStep({
         </Link>
         <div className="flex flex-col items-start gap-1 sm:items-end">
           <Link
-            to={`/solutions/${solution.id}`}
+            to={wizardLaunchPath(solution.id)}
             className={buttonClasses({ variant: 'primary', size: 'md' })}
           >
             {t('wizard.next.toLaunch')}
           </Link>
-          <p className="text-[13px] text-subtle">{t('wizard.next.launchNote')}</p>
         </div>
       </div>
     </WizardFrame>

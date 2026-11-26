@@ -363,6 +363,27 @@ export function setVerdict(
   });
 }
 
+/** Что мешает запуску (шаг 4 мастера): тесты и тариф, теми же правилами, что «Запустить». */
+export interface LaunchStatus {
+  status: SolutionStatus;
+  alreadyRunning: boolean;
+  readiness: SolutionDetails['readiness'];
+  tier: {
+    enforced: boolean;
+    id: 'start' | 'growth' | 'business' | 'scale' | null;
+    name: string | null;
+    /** Сколько ИИ-агентов для клиентов уже работает. */
+    active: number;
+    limit: number | null;
+  };
+  blocked: { code: 'tier_required' | 'solution_limit'; message: string } | null;
+  canLaunch: boolean;
+}
+
+export function fetchLaunchStatus(id: string): Promise<LaunchStatus> {
+  return call(`/${enc(id)}/launch`);
+}
+
 export function activateSolution(id: string): Promise<SolutionDetails> {
   return call(`/${enc(id)}/activate`, { method: 'POST' });
 }
