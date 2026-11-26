@@ -1123,8 +1123,8 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
           409,
           'bot_has_public_page',
           caller.language === 'en'
-            ? 'A customer bot talks on its own page, not in a private chat.'
-            : 'Бот для клиентов отвечает на своей странице, а не в личном чате.',
+            ? 'An AI agent for customers talks on its own page, not in a private chat.'
+            : 'ИИ-агент для клиентов отвечает на своей странице, а не в личном чате.',
         );
         return;
       }

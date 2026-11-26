@@ -4,12 +4,12 @@ import { diagramSize, wrapText } from '@/pages/solutions/process-diagram-layout'
 describe('схема: перенос подписей и размер', () => {
   it('переносит по словам в две строки и обрезает только вторую', () => {
     expect(wrapText('Новая заявка', 20)).toEqual(['Новая заявка']);
-    expect(wrapText('Бот «Ketner AI — ассистент поддержки»', 20)).toEqual([
-      'Бот «Ketner AI —',
+    expect(wrapText('Агент «Ketner AI — ассистент поддержки»', 20)).toEqual([
+      'Агент «Ketner AI —',
       'ассистент поддержки»',
     ]);
-    expect(wrapText('Бот «Ketner AI — ассистент поддержки клиентов магазина»', 20)).toEqual([
-      'Бот «Ketner AI —',
+    expect(wrapText('Агент «Ketner AI — ассистент поддержки клиентов магазина»', 20)).toEqual([
+      'Агент «Ketner AI —',
       'ассистент поддержки…',
     ]);
     // Слово длиннее строки режется, а не вылезает за узел.

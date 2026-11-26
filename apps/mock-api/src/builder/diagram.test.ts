@@ -144,8 +144,8 @@ test('снимок: новый бот — одно событие «заявка
     ],
   });
   assert.deepEqual(diagram.description, [
-    'Посетитель пишет боту → Бот «Лиса»',
-    'Бот «Лиса» → Новая заявка',
+    'Клиент пишет агенту → Агент «Лиса»',
+    'Агент «Лиса» → Новая заявка',
     'Новая заявка → Строка в таблицу (риск низкий); Уведомление вам (почта, Telegram, риск низкий)',
     'Строка в таблицу (риск низкий) → Google Таблица (подключена)',
   ]);
@@ -184,7 +184,7 @@ test('снимок: «сводка за день» — расписание са
   });
   assert.deepEqual(
     diagram.nodes.map((node) => node.label),
-    ['A visitor writes to the bot', 'Bot "Лиса"', 'Once a day', 'Lead summary'],
+    ['A customer writes to the agent', 'Agent "Лиса"', 'Once a day', 'Lead summary'],
   );
 });
 

@@ -62,7 +62,7 @@ export type DiagramConnections = Partial<Record<AutomationConnection['id'], Conn
 type Text = Record<Language, string>;
 
 const TRIGGER_LABEL: Record<SolutionSpec['trigger']['kind'], Text> = {
-  public_page: { ru: 'Посетитель пишет боту', en: 'A visitor writes to the bot' },
+  public_page: { ru: 'Клиент пишет агенту', en: 'A customer writes to the agent' },
   chat_message: { ru: 'Сообщение в чате', en: 'A chat message' },
   webhook: { ru: 'Вызов извне', en: 'An external call' },
   schedule: { ru: 'По расписанию', en: 'On schedule' },
@@ -116,7 +116,9 @@ const CHANNEL_LABEL: Record<'owner_email' | 'owner_telegram', Text> = {
 };
 
 function agentLabel(template: string, title: string, language: Language): string {
-  if (template === 'customer_bot') return language === 'en' ? `Bot "${title}"` : `Бот «${title}»`;
+  if (template === 'customer_bot') {
+    return language === 'en' ? `Agent "${title}"` : `Агент «${title}»`;
+  }
   if (template === 'personal_assistant') {
     return language === 'en' ? `Assistant "${title}"` : `Помощник «${title}»`;
   }

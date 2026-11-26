@@ -79,8 +79,8 @@ export const CAPABILITIES: Readonly<Record<CapabilityId, Capability>> = {
     availability: 'available',
     label: { ru: 'Тексты и ответы ИИ', en: 'AI text and answers' },
     hint: {
-      ru: 'Помощник или бот для клиентов в разделе «Мои автоматизации».',
-      en: 'An assistant or a customer bot in the My automations section.',
+      ru: 'Помощник или ИИ-агент для клиентов в разделе «Мои автоматизации».',
+      en: 'An assistant or an AI agent for customers in the My automations section.',
     },
   },
   // Бот для клиентов (рецепт customer_bot): своя страница, ссылка, QR-код, кнопка на сайте.
@@ -89,8 +89,8 @@ export const CAPABILITIES: Readonly<Record<CapabilityId, Capability>> = {
     id: 'customer_bot_page',
     availability: 'available',
     label: {
-      ru: 'Бот для клиентов: своя страница, ссылка, QR-код и кнопка на сайте; заявки владельцу',
-      en: 'Customer bot: its own page, link, QR code and a site button; requests go to the owner',
+      ru: 'ИИ-агент для клиентов: своя страница, ссылка, QR-код и кнопка на сайте; заявки владельцу',
+      en: 'AI agent for customers: its own page, link, QR code and a site button; requests go to the owner',
     },
     hint: {
       ru: 'Работает по ссылке, QR-коду и кнопке на сайте. К WhatsApp и Instagram не подключается.',

@@ -299,7 +299,7 @@ test('схема бота: узлы и описание по настройка�
   assert.deepEqual([sheet.state, sheet.stateLabel], ['off', 'не подключена']);
   const manager = diagram.nodes.find((node) => node.id === 'step:lead_to_manager:step-1')!;
   assert.deepEqual([manager.state, manager.stateLabel], ['ok', 'почта, Telegram']);
-  assert.equal(diagram.description[0], 'Посетитель пишет боту → Бот «Лиса»');
+  assert.equal(diagram.description[0], 'Клиент пишет агенту → Агент «Лиса»');
 
   // Выключили «заявка → таблица» — узлов таблицы нет.
   await fetch(`${server.baseUrl}/api/solutions/${id}/bot`, {

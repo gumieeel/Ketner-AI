@@ -59,7 +59,9 @@ export function customerBotOffer(
   );
   const ru = language === 'ru';
   return {
-    title: ru ? 'Бот для клиентов по ссылке и QR-коду' : 'Customer bot by link and QR code',
+    title: ru
+      ? 'ИИ-агент для клиентов по ссылке и QR-коду'
+      : 'AI agent for customers by link and QR code',
     area: 'clients',
     recipe: 'customer_bot',
     problem: ru

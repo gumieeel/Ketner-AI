@@ -70,7 +70,7 @@ export const TEMPLATES: Readonly<Record<TemplateId, SolutionTemplate>> = {
     available: true,
     requires: ['text_generation'],
     materials: false,
-    label: { ru: 'Бот для клиентов', en: 'Customer bot' },
+    label: { ru: 'ИИ-агент для клиентов', en: 'AI agent for customers' },
     description: {
       ru: 'бот на странице Ketner отвечает клиентам бизнеса и собирает заявки',
       en: "a bot on a Ketner page answers the business's customers and collects requests",

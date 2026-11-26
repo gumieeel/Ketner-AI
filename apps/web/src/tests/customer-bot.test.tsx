@@ -312,11 +312,11 @@ describe('кабинет бота: ссылка, код для сайта, за�
     };
     const diagram: BotDiagram = {
       nodes: [
-        { id: 'trigger', kind: 'trigger', label: 'Посетитель пишет боту', level: 0, row: 0 },
+        { id: 'trigger', kind: 'trigger', label: 'Клиент пишет агенту', level: 0, row: 0 },
         {
           id: 'agent:bot',
           kind: 'agent',
-          label: 'Бот «Ketner AI — ассистент поддержки»',
+          label: 'Агент «Ketner AI — ассистент поддержки»',
           level: 1,
           row: 0,
         },
@@ -357,8 +357,8 @@ describe('кабинет бота: ссылка, код для сайта, за�
         { from: 'step:lead_to_sheet:step-1', to: 'service:spreadsheets_sync' },
       ],
       description: [
-        'Посетитель пишет боту → Бот «Ketner AI — ассистент поддержки»',
-        'Бот «Ketner AI — ассистент поддержки» → Новая заявка',
+        'Клиент пишет агенту → Агент «Ketner AI — ассистент поддержки»',
+        'Агент «Ketner AI — ассистент поддержки» → Новая заявка',
       ],
     };
     const calls = stubFetch((call) => {
@@ -383,17 +383,17 @@ describe('кабинет бота: ссылка, код для сайта, за�
     const { calls, diagram } = diagramPage();
 
     const section = await screen.findByTestId('process-diagram');
-    expect(screen.getByRole('heading', { name: 'Как работает бот' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Как работает агент' })).toBeVisible();
     expect(section).toHaveAttribute('data-view', 'list');
     expect(within(section).queryByRole('img')).toBeNull();
     expect(section.querySelector('.overflow-x-auto')).toBeNull();
-    const list = within(section).getByRole('list', { name: 'Схема работы бота' });
+    const list = within(section).getByRole('list', { name: 'Схема работы агента' });
     expect(list.querySelectorAll('[data-chain]')).toHaveLength(diagram.nodes.length);
     for (const node of diagram.nodes) {
       expect(within(list).getByText(node.label)).toBeVisible();
     }
     // Имя бота целиком; таблица — в ветке «Строка в таблицу», а не после уведомления.
-    expect(within(list).getByText('Бот «Ketner AI — ассистент поддержки»')).toBeVisible();
+    expect(within(list).getByText('Агент «Ketner AI — ассистент поддержки»')).toBeVisible();
     const branch = list.querySelector('[data-chain="step:lead_to_sheet:step-1"]') as HTMLElement;
     expect(branch.querySelector('[data-chain="service:spreadsheets_sync"]')).not.toBeNull();
     const notice = list.querySelector('[data-chain="step:lead_to_manager:step-1"]') as HTMLElement;
@@ -415,12 +415,12 @@ describe('кабинет бота: ссылка, код для сайта, за�
 
     const section = await screen.findByTestId('process-diagram');
     await waitFor(() => expect(section).toHaveAttribute('data-view', 'diagram'));
-    const svg = within(section).getByRole('img', { name: 'Схема работы бота' });
+    const svg = within(section).getByRole('img', { name: 'Схема работы агента' });
     expect(Number(svg.getAttribute('width'))).toBeLessThanOrEqual(1100);
     expect(svg.getAttribute('viewBox')).toBe(
       `0 0 ${svg.getAttribute('width')} ${svg.getAttribute('height')}`,
     );
-    expect(within(section).queryByRole('list', { name: 'Схема работы бота' })).toBeNull();
+    expect(within(section).queryByRole('list', { name: 'Схема работы агента' })).toBeNull();
     // Шесть узлов и пять связей; второй строкой — состояние или риск.
     expect(svg.querySelectorAll('[data-node]')).toHaveLength(6);
     expect(svg.querySelectorAll('path[marker-end]')).toHaveLength(5);
@@ -433,10 +433,10 @@ describe('кабинет бота: ссылка, код для сайта, за�
     // Длинное имя бота — в две строки, полностью — в подсказке.
     const bot = svg.querySelector('[data-node="agent:bot"]')!;
     expect(bot.querySelectorAll('text:first-of-type tspan')).toHaveLength(2);
-    expect(bot.querySelector('title')?.textContent).toBe('Бот «Ketner AI — ассистент поддержки»');
+    expect(bot.querySelector('title')?.textContent).toBe('Агент «Ketner AI — ассистент поддержки»');
     // Описание — то же текстом, на него ссылается схема; оно не внутри прокрутки и не внутри SVG.
     const description = document.getElementById(svg.getAttribute('aria-describedby')!)!;
-    expect(description.textContent).toMatch(/Посетитель пишет боту → Бот «Ketner AI/);
+    expect(description.textContent).toMatch(/Клиент пишет агенту → Агент «Ketner AI/);
     expect(svg.contains(description)).toBe(false);
     expect(section.querySelector('.overflow-x-auto')).toBeNull();
   });
@@ -454,7 +454,7 @@ describe('кабинет бота: ссылка, код для сайта, за�
     renderRoute('/solutions/b1');
     expect(await screen.findByRole('heading', { name: 'Заявки' })).toBeVisible();
     expect(screen.queryByTestId('process-diagram')).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Как работает бот' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Как работает агент' })).toBeNull();
   });
 
   it('владелец видит, где живёт бот, заявки и исправляет ответ из диалога', async () => {
