@@ -90,7 +90,7 @@ export const en: Record<TranslationKey, string> = {
   'pricing.free.analysis':
     'Business analysis: what can be automated, what you can do yourself and what needs the team. One analysis a day without signing up.',
   'pricing.free.build':
-    'Building and testing assistants and customer bots, within the free monthly allowance.',
+    'Building and testing assistants and AI agents for customers, within the free monthly allowance.',
   'pricing.free.report':
     'For team work the report shows a preliminary estimate; for what Ketner already does, the plan that fits.',
   'pricing.freeCta': 'Analyze your business',
@@ -532,7 +532,7 @@ export const en: Record<TranslationKey, string> = {
   // Вход и регистрация
   'auth.asideTitle': 'AI agents for your business.',
   'auth.asideLead':
-    'Describe your business — Ketner finds what to automate and helps you build an assistant or a customer bot. Building and testing are free.',
+    'Describe your business — Ketner finds what to automate and helps you build an assistant or an AI agent for customers. Building and testing are free.',
   'auth.showPassword': 'Show',
   'auth.hidePassword': 'Hide',
   'auth.loginFailed': 'Sign-in failed',
@@ -1740,7 +1740,7 @@ export const en: Record<TranslationKey, string> = {
   'analysis.map.not_relevant': 'Not relevant',
   'analysis.map.unclear': 'Not enough information',
   'analysis.recipe.personal_assistant': 'Ready automation: personal assistant',
-  'analysis.recipe.customer_bot': 'Ready automation: customer bot',
+  'analysis.recipe.customer_bot': 'Ready automation: AI agent for customers',
   'analysis.recipe.weekly_content': 'Ready automation: content for the week',
   'analysis.recipe.study_assistant': 'Ready tool: study assistant',
   'analysis.source.read': 'Read the website {site}.',
@@ -2514,7 +2514,7 @@ export const en: Record<TranslationKey, string> = {
   'botPage.aiNoteShort': 'AI replies, may make mistakes',
   'builder.list.title': 'My automations',
   'builder.list.lead':
-    'Everything that works for you: customer bots and personal assistants. They are easiest to create from an analysis report; an assistant can also be made from scratch.',
+    'Everything that works for you: AI agents for customers and personal assistants. They are easiest to create from an analysis report; an assistant can also be made from scratch.',
   'builder.list.newName': 'New assistant',
   'builder.list.namePlaceholder': 'For example: Customer replies',
   'builder.list.createBlank': 'Create from scratch',

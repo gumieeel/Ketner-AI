@@ -100,10 +100,10 @@ export const RECIPES: Readonly<Record<RecipeId, Recipe>> = {
   customer_bot: {
     id: 'customer_bot',
     available: true,
-    label: { ru: 'Бот для клиентов', en: 'Customer bot' },
+    label: { ru: 'ИИ-агент для клиентов', en: 'AI agent for customers' },
     description: {
-      ru: 'бот для клиентов бизнеса: своя страница, ссылка, QR-код и кнопка на сайте; отвечает на вопросы и собирает заявки. К WhatsApp и Instagram не подключается',
-      en: "a bot for the business's customers: its own page, link, QR code and a site button; answers questions and collects requests. Does not connect to WhatsApp or Instagram",
+      ru: 'ИИ-агент для клиентов бизнеса: своя страница, ссылка, QR-код и кнопка на сайте; отвечает на вопросы и собирает заявки. К WhatsApp и Instagram не подключается',
+      en: "an AI agent for the business's customers: its own page, link, QR code and a site button; answers questions and collects requests. Does not connect to WhatsApp or Instagram",
     },
   },
   study_assistant: {

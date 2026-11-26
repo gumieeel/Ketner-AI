@@ -4,7 +4,7 @@ import { useAuth } from '@/features/auth/auth-store';
 import { CUSTOMER_TELEGRAM_CHANNEL_LIVE, STARTING_PRICE, TIERS } from '@/features/billing/tiers';
 import { RELEASES, ROADMAP } from '@/features/content/changelog';
 import { KNOWN_ISSUES } from '@/features/content/known-issues';
-import { HOME_FAQ } from '@/features/discovery/home-content';
+import { HOME_FAQ, IMPLEMENTATION } from '@/features/discovery/home-content';
 import { en } from '@/i18n/en';
 import { ru } from '@/i18n/ru';
 import { setSiteFeatures } from '@/lib/features';
@@ -67,6 +67,24 @@ describe('тексты о продукте', () => {
     );
     // В истории закрытие чата и Ketner Code — факт; предложения о кредитах, звёздах и чате нет.
     expect(article.textContent).not.toMatch(/без подписки|в одном чате|звёзд|⭐|кредит/i);
+    // Решение владельца 25.11: «ИИ-агент для клиентов», не «бот для клиентов».
+    // История на странице («стал платформой… боты для клиентов») — как было, её не переписываем.
+    expect(article).toHaveTextContent(/помогает создать помощника или ИИ-агента для клиентов/);
+    expect(article).toHaveTextContent(/ИИ-агент для клиентов отвечает на частые вопросы/);
+  });
+
+  it('название «ИИ-агент для клиентов» в публичных текстах (RU/EN), кроме истории изменений', () => {
+    const home = HOME_FAQ.flatMap((item) => [item.q.ru, item.q.en, item.a.ru, item.a.en]).join(' ');
+    const implementation = IMPLEMENTATION.map((step) => `${step.text.ru} ${step.text.en}`).join(
+      ' ',
+    );
+    const texts = [home, implementation, ...Object.values(ru), ...Object.values(en)];
+    for (const text of texts) {
+      expect(text).not.toMatch(/[Бб]от[а-я]* для клиентов|customer bots?\b/);
+    }
+    expect(implementation).toMatch(/ИИ-агент для клиентов, личный помощник/);
+    expect(ru['analysis.recipe.customer_bot']).toBe('Готовая автоматизация: ИИ-агент для клиентов');
+    expect(en['analysis.recipe.customer_bot']).toBe('Ready automation: AI agent for customers');
   });
 
   it('«Что нового»: последняя запись — внешние сервисы в тарифах', () => {

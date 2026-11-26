@@ -54,8 +54,8 @@ export const IMPLEMENTATION: readonly HomeStep[] = [
     id: 'ready',
     title: { ru: 'Готовые автоматизации', en: 'Ready-made automations' },
     text: {
-      ru: 'Бот для клиентов, личный помощник и другие готовые решения запускаются прямо из анализа, без программиста.',
-      en: 'A customer bot, a personal assistant and other ready-made solutions launch right from the analysis, no developer needed.',
+      ru: 'ИИ-агент для клиентов, личный помощник и другие готовые решения запускаются прямо из анализа, без программиста.',
+      en: 'An AI agent for customers, a personal assistant and other ready-made solutions launch right from the analysis, no developer needed.',
     },
   },
   {
