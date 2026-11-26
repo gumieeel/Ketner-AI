@@ -70,7 +70,7 @@ export function botSolutionSpec(solution: Pick<Solution, 'name' | 'bot' | 'sourc
     strategy: workflows.length > 0 ? 'agent_calls_workflow' : 'agent',
     trigger: {
       kind: 'public_page',
-      description: 'Посетитель пишет боту на странице или в виджете',
+      description: 'Клиент пишет агенту на странице или в виджете',
     },
     components: {
       agents: [

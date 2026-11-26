@@ -2393,10 +2393,10 @@ export const ru = {
     'Раз в сутки — сколько заявок пришло, имена и ссылка в кабинет.',
   'wizard.automation.daily_lead_summary.unavailable':
     'Скоро: нужен запуск по расписанию, его в Ketner пока нет.',
-  'builder.bot.diagram.title': 'Как работает бот',
+  'builder.bot.diagram.title': 'Как работает агент',
   'builder.bot.diagram.lead':
     'Схема строится из настроек бота и подключений и обновляется сама. Менять её вручную не нужно.',
-  'builder.bot.diagram.label': 'Схема работы бота',
+  'builder.bot.diagram.label': 'Схема работы агента',
   'builder.bot.diagram.asText': 'Схема текстом',
   'builder.bot.diagram.risk.low': 'риск низкий',
   'builder.bot.diagram.risk.medium': 'риск средний',

@@ -2411,10 +2411,10 @@ export const en: Record<TranslationKey, string> = {
     'Once a day: how many requests came in, names and a link to your account.',
   'wizard.automation.daily_lead_summary.unavailable':
     'Coming soon: it needs scheduled runs, which Ketner does not have yet.',
-  'builder.bot.diagram.title': 'How the bot works',
+  'builder.bot.diagram.title': 'How the agent works',
   'builder.bot.diagram.lead':
     'The diagram is built from the bot settings and connections and updates by itself. There is nothing to edit by hand.',
-  'builder.bot.diagram.label': 'Bot process diagram',
+  'builder.bot.diagram.label': 'Agent process diagram',
   'builder.bot.diagram.asText': 'Diagram as text',
   'builder.bot.diagram.risk.low': 'low risk',
   'builder.bot.diagram.risk.medium': 'medium risk',

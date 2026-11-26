@@ -251,11 +251,9 @@ function server(
     if (path === '/b1/launch') return json(200, launch);
     if (path === '/b1/bot/diagram') {
       return json(200, {
-        nodes: [
-          { id: 'trigger', kind: 'trigger', label: 'Посетитель пишет боту', level: 0, row: 0 },
-        ],
+        nodes: [{ id: 'trigger', kind: 'trigger', label: 'Клиент пишет агенту', level: 0, row: 0 }],
         edges: [],
-        description: ['Посетитель пишет боту'],
+        description: ['Клиент пишет агенту'],
       });
     }
     if (path === '/b1/activate' && call.method === 'POST') {

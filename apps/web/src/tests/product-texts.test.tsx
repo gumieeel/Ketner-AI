@@ -85,6 +85,11 @@ describe('тексты о продукте', () => {
     expect(implementation).toMatch(/ИИ-агент для клиентов, личный помощник/);
     expect(ru['analysis.recipe.customer_bot']).toBe('Готовая автоматизация: ИИ-агент для клиентов');
     expect(en['analysis.recipe.customer_bot']).toBe('Ready automation: AI agent for customers');
+    // Схема в кабинете: заголовок и подпись для экранных дикторов.
+    expect(ru['builder.bot.diagram.title']).toBe('Как работает агент');
+    expect(en['builder.bot.diagram.title']).toBe('How the agent works');
+    expect(ru['builder.bot.diagram.label']).toBe('Схема работы агента');
+    expect(en['builder.bot.diagram.label']).toBe('Agent process diagram');
   });
 
   it('«Что нового»: последняя запись — внешние сервисы в тарифах', () => {
