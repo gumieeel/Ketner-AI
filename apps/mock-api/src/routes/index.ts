@@ -662,6 +662,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   // на оба роутера: кабинет владельца (/solutions) и публичная страница бота (/b).
   const builderRuntime = createBuilderRuntime({
     ai: deps.ai,
+    accountTiers: activeAccountTiers,
     userStore: activeUserStore,
     subscriptionStore: activeSubscriptionStore,
     usageStore: activeUsageStore,

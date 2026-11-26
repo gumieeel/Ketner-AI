@@ -25,6 +25,8 @@ import { runStructuredTask, type TaskCaller } from '../discovery/run-task.js';
 import { realModelName } from '../discovery/service.js';
 import type { DiscoveryStore } from '../discovery/store.js';
 import { PLATFORM_LIMITS } from '../services/discovery-limits.js';
+import { tierById, type TierId } from '../services/tiers.js';
+import { checkSolutionLaunch, type SolutionLaunchCheck } from '../billing/active-solutions.js';
 import { toCredits } from '../services/entitlement.js';
 import type { Language } from '../types.js';
 import {
@@ -91,6 +93,11 @@ export interface BuilderServiceDeps {
   allowance?: BuildAllowance;
   registry?: ModelRegistry;
   now?: () => Date;
+  /**
+   * Тариф при запуске ИИ-агента для клиентов (billing/active-solutions.ts): активный тариф и
+   * свободное место среди активных решений. Нет зависимости или тарифы выключены — без проверки.
+   */
+  launchTier?: { enforced: () => boolean; tierOf: (userId: string) => TierId | null };
 }
 
 export type BuilderError = {
@@ -1130,6 +1137,26 @@ export class BuilderService {
         details: { reason: view.readiness.reason },
       };
     }
+    const launch = await this.launchTierCheck(caller, view.solution);
+    if (launch && !launch.ok) {
+      return {
+        ok: false,
+        status: launch.code === 'tier_required' ? 403 : 409,
+        code: launch.code,
+        message: launch.message,
+        details: {
+          pricingUrl: '/pricing',
+          ...(launch.code === 'solution_limit'
+            ? {
+                used: launch.used,
+                limit: launch.limit,
+                tier: launch.tier,
+                nextTier: launch.nextTier,
+              }
+            : {}),
+        },
+      };
+    }
     const updated = await this.deps.store.updateSolution(
       {
         ...view.solution,
@@ -1140,6 +1167,61 @@ export class BuilderService {
       view.solution.version,
     );
     return updated ? { ok: true, solution: updated } : conflict(caller.language);
+  }
+
+  /**
+   * Проверка тарифа при запуске ИИ-агента для клиентов; `null` — проверка не нужна (другой тип или
+   * тарифы выключены).
+   */
+  private async launchTierCheck(
+    caller: BuilderCaller,
+    solution: Solution,
+  ): Promise<SolutionLaunchCheck | null> {
+    const tiers = this.deps.launchTier;
+    if (solution.type !== 'customer_bot' || !tiers?.enforced()) return null;
+    const active = (await this.deps.store.listSolutions(caller.userId)).filter(
+      (item) => item.type === 'customer_bot' && item.status === 'active' && item.id !== solution.id,
+    ).length;
+    return checkSolutionLaunch(
+      { tier: tiers.tierOf(caller.userId), active, alreadyActive: solution.status === 'active' },
+      caller.language,
+    );
+  }
+
+  /**
+   * Что мешает запуску (шаг 4 мастера) — до нажатия «Запустить», теми же правилами, что `activate`:
+   * готовность по тестам и тариф с местом.
+   */
+  async launchStatus(caller: BuilderCaller, id: string) {
+    const view = await this.get(caller.userId, id);
+    if (!view) return null;
+    if (view.kind !== 'assistant') return null;
+    const tiers = this.deps.launchTier;
+    const enforced = view.solution.type === 'customer_bot' && Boolean(tiers?.enforced());
+    const tierId = enforced ? (tiers!.tierOf(caller.userId) ?? null) : null;
+    const active = enforced
+      ? (await this.deps.store.listSolutions(caller.userId)).filter(
+          (item) => item.type === 'customer_bot' && item.status === 'active',
+        ).length
+      : 0;
+    const check = await this.launchTierCheck(caller, view.solution);
+    const tier = tierId ? tierById(tierId) : null;
+    return {
+      status: view.solution.status,
+      alreadyRunning:
+        view.solution.status === 'active' &&
+        view.solution.activeVersion === view.solution.currentVersion,
+      readiness: view.readiness,
+      tier: {
+        enforced,
+        id: tier?.id ?? null,
+        name: tier?.name ?? null,
+        active,
+        limit: tier?.activeSolutions ?? null,
+      },
+      blocked: check && !check.ok ? { code: check.code, message: check.message } : null,
+      canLaunch: view.readiness.ready && !(check && !check.ok),
+    };
   }
 
   async pause(

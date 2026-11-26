@@ -3,6 +3,8 @@ import test from 'node:test';
 import type { GatewayRequest, GatewayStreamCallbacks } from '../ai/gateway-types.js';
 import { MemoryDiscoveryStore } from '../discovery/store.js';
 import type { Analysis, Opportunity } from '../discovery/types.js';
+import type { TierId } from '../services/tiers.js';
+import type { AssistantConfig } from './types.js';
 import { BuilderService, judgeVerdict, type BuilderCaller } from './service.js';
 import { MemoryBuilderStore } from './store.js';
 import { isToolConfig } from './types.js';
@@ -118,7 +120,13 @@ function opportunity(
   };
 }
 
-async function setup(options: { exhausted?: boolean; failJudgeFor?: string[] } = {}) {
+async function setup(
+  options: {
+    exhausted?: boolean;
+    failJudgeFor?: string[];
+    launchTier?: { enforced: () => boolean; tierOf: (userId: string) => TierId | null };
+  } = {},
+) {
   const discovery = new MemoryDiscoveryStore();
   const store = new MemoryBuilderStore();
   const fake = fakeGateway(options);
@@ -127,6 +135,7 @@ async function setup(options: { exhausted?: boolean; failJudgeFor?: string[] } =
     opportunity('o-ok', 'alice', 'ready'),
     opportunity('o-no', 'alice', 'not_supported'),
     { ...opportunity('o-bot', 'alice', 'ready'), recipe: 'customer_bot' },
+    { ...opportunity('o-bot-2', 'alice', 'ready'), recipe: 'customer_bot' },
   ]);
   // Бесплатный лимит создания и проверки (P2): черновики и прогоны платит он, а не баланс.
   const counters = new MemoryCounterStore();
@@ -143,6 +152,7 @@ async function setup(options: { exhausted?: boolean; failJudgeFor?: string[] } =
     discovery,
     gateway: fake.gateway,
     allowance,
+    ...(options.launchTier ? { launchTier: options.launchTier } : {}),
   });
   return { service, store, requests: fake.requests, allowance };
 }
@@ -425,4 +435,105 @@ test('бот из возможности: шаг «заявка → менедж
     lead_to_sheet: { enabled: true, version: 1 },
     lead_to_manager: { enabled: true, version: 1, options: { email: true, telegram: true } },
   });
+});
+
+/** ИИ-агент для клиентов из возможности, прошедший тесты: готов к запуску. */
+async function readyBot(service: BuilderService, opportunityId = 'o-bot') {
+  const created = await service.createFromOpportunity(alice, {
+    analysisId: 'an-1',
+    opportunityId,
+    confirm: true,
+  });
+  if (!created.ok) return assert.fail('черновик не создан');
+  const id = created.solution.id;
+  await service.saveCase(alice, id, { input: 'Есть доставка?', criteria: ['Отвечает вежливо'] });
+  const started = await service.runTests(alice, id, true);
+  assert.equal(started.ok, true);
+  await service.whenIdle();
+  assert.deepEqual((await service.get('alice', id))?.readiness, { ready: true });
+  return id;
+}
+
+test('запуск ИИ-агента для клиентов: нужен тариф и свободное место; новая версия места не требует', async () => {
+  const tier: { id: TierId | null } = { id: null };
+  const { service, store } = await setup({
+    launchTier: { enforced: () => true, tierOf: () => tier.id },
+  });
+  const first = await readyBot(service);
+
+  // Без тарифа — 403 tier_required, агент остаётся черновиком.
+  const noTier = await service.activate(alice, first);
+  assert.equal(noTier.ok, false);
+  if (!noTier.ok) {
+    assert.equal(noTier.status, 403);
+    assert.equal(noTier.code, 'tier_required');
+    assert.equal(noTier.details?.pricingUrl, '/pricing');
+  }
+  assert.equal((await store.getSolution('alice', first))?.status, 'draft');
+  const status = await service.launchStatus(alice, first);
+  assert.equal(status?.canLaunch, false);
+  assert.equal(status?.blocked?.code, 'tier_required');
+
+  // Start: одно активное решение.
+  tier.id = 'start';
+  assert.equal((await service.launchStatus(alice, first))?.canLaunch, true);
+  const launched = await service.activate(alice, first);
+  assert.equal(launched.ok && launched.solution.status, 'active');
+
+  // Второй агент: места нет — 409 solution_limit с подсказкой следующего тарифа.
+  const second = await readyBot(service, 'o-bot-2');
+  const full = await service.activate(alice, second);
+  assert.equal(full.ok, false);
+  if (!full.ok) {
+    assert.equal(full.status, 409);
+    assert.equal(full.code, 'solution_limit');
+    assert.deepEqual(
+      { used: full.details?.used, limit: full.details?.limit, next: full.details?.nextTier },
+      { used: 1, limit: 1, next: 'growth' },
+    );
+    assert.match(full.message, /Активных решений: 1 из 1 — тариф Start/);
+  }
+  assert.deepEqual((await service.launchStatus(alice, second))?.tier, {
+    enforced: true,
+    id: 'start',
+    name: 'Start',
+    active: 1,
+    limit: 1,
+  });
+
+  // Работающий агент: новая версия включается без места.
+  const view = await service.get('alice', first);
+  await service.updateConfig(alice, first, {
+    ...(view!.config as AssistantConfig),
+    instructions: 'Новые правила.',
+  });
+  const rerun = await service.runTests(alice, first, true);
+  assert.equal(rerun.ok, true);
+  await service.whenIdle();
+  const again = await service.activate(alice, first);
+  assert.equal(again.ok && again.solution.activeVersion, 2);
+
+  // Первый на паузе — место свободно, второй запускается.
+  await service.pause(alice, first);
+  const freed = await service.activate(alice, second);
+  assert.equal(freed.ok && freed.solution.status, 'active');
+});
+
+test('запуск: тарифы выключены или это помощник для себя — без проверки тарифа', async () => {
+  const off = await setup({ launchTier: { enforced: () => false, tierOf: () => null } });
+  const bot = await readyBot(off.service);
+  assert.equal((await off.service.activate(alice, bot)).ok, true);
+  assert.equal((await off.service.launchStatus(alice, bot))?.tier.enforced, false);
+
+  const { service } = await setup({ launchTier: { enforced: () => true, tierOf: () => null } });
+  const created = await service.createFromOpportunity(alice, {
+    analysisId: 'an-1',
+    opportunityId: 'o-ok',
+    confirm: true,
+  });
+  if (!created.ok) return assert.fail('черновик не создан');
+  await service.runTests(alice, created.solution.id, true);
+  await service.whenIdle();
+  const assistant = await service.activate(alice, created.solution.id);
+  assert.equal(assistant.ok, true, 'помощник для себя — не активное решение тарифа');
 });
