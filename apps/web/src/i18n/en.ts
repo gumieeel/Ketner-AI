@@ -1739,10 +1739,6 @@ export const en: Record<TranslationKey, string> = {
   'analysis.map.found': 'Found: {count}',
   'analysis.map.not_relevant': 'Not relevant',
   'analysis.map.unclear': 'Not enough information',
-  'analysis.recipe.personal_assistant': 'Ready automation: personal assistant',
-  'analysis.recipe.customer_bot': 'Ready automation: AI agent for customers',
-  'analysis.recipe.weekly_content': 'Ready automation: content for the week',
-  'analysis.recipe.study_assistant': 'Ready tool: study assistant',
   'analysis.source.read': 'Read the website {site}.',
   'analysis.source.failed':
     'Could not open the website {site} — the analysis is based on your description.',
@@ -1758,6 +1754,8 @@ export const en: Record<TranslationKey, string> = {
   'analysis.chat.step': 'Question {number} of {total}',
   'analysis.chat.next': 'Next',
   'analysis.chat.dontKnow': 'I don’t know — skip',
+  'analysis.chat.keyHint':
+    'If you are not sure, pick the closest option or answer roughly. Without this answer the analysis stays generic.',
   'analysis.chat.skipped': 'Skipped',
   'analysis.chat.change': 'Change',
   'analysis.chat.ready':
@@ -1766,7 +1764,8 @@ export const en: Record<TranslationKey, string> = {
   'analysis.chat.ketner': 'Ketner',
   'analysis.chat.you': 'You',
   'analysis.questions.title': 'A few clarifications',
-  'analysis.questions.lead': 'Answers make the result more accurate. Any question can be skipped.',
+  'analysis.questions.lead':
+    'Answers make the result more accurate. If you are not sure, answer roughly.',
   'analysis.questions.optional': 'optional',
   'analysis.questions.why': 'Why: {reason}',
   'analysis.questions.placeholder': 'Your answer',
@@ -1778,6 +1777,8 @@ export const en: Record<TranslationKey, string> = {
   'analysis.questions.saved': 'Answers saved',
   'analysis.questions.saveFailed': 'Could not save the draft — your answers stay on the page.',
   'analysis.questions.submit': 'Continue analysis',
+  'analysis.questions.needKeyAnswer':
+    'Without this answer the analysis stays generic. A rough answer is fine.',
   'analysis.questions.needAnswer': 'Answer the question or skip it.',
 
   'analysis.failed.title': 'Step “{stage}” did not complete',
@@ -1847,6 +1848,8 @@ export const en: Record<TranslationKey, string> = {
   'analysis.ready.benefit': 'Benefit',
   'analysis.ready.hours': '≈ {from}–{to} h per week',
   'analysis.ready.firstStep': 'First step',
+  'analysis.launch.now': 'Launches now',
+  'analysis.launch.soon': 'Coming soon',
   'analysis.feasibility.ready': 'Can be done now',
   'analysis.feasibility.needs_setup': 'Needs setup',
   'analysis.feasibility.needs_integration': 'Needs an integration',
@@ -1855,8 +1858,6 @@ export const en: Record<TranslationKey, string> = {
   'analysis.page.allAnalyses': 'My analyses',
   'analysis.report.startTitle': 'Your implementation plan',
   'analysis.report.opportunitiesTitle': 'Opportunities',
-  'analysis.report.statusNote':
-    'Feasibility is determined by Ketner from what it can do today and what you have connected, not by the model. Time saved is a forecast, calculated only from the numbers in your description.',
   'analysis.report.save': 'Save analysis',
   'analysis.report.saved': 'Saved',
   'analysis.report.loginToSave': 'Sign in to save',

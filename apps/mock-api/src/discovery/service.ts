@@ -86,6 +86,7 @@ import {
 } from './schemas.js';
 import type { DiscoveryStore } from './store.js';
 import { contextTemplate, discoveryTemplate, planTemplate } from './templates.js';
+import { gateQuestions, needsKeyAnswer } from './key-facts.js';
 import type {
   Analysis,
   AnswerRecord,
@@ -659,19 +660,34 @@ export class DiscoveryService {
       return notWaiting(current.language);
     }
     const answers = normalizeAnswers(current.questions, body.answers, true);
+    const answered = (id: string) => {
+      const answer = answers[id];
+      return Boolean(answer && 'value' in answer && answer.value.trim());
+    };
+    // Вопрос о ключевом факте не пропускается: без ответа анализ получится общим.
+    const keyMissing = current.questions.filter(
+      (question) => needsKeyAnswer(question) && !answered(question.id),
+    );
     const missing = current.questions.filter(
-      (question) => !question.optional && !answers[question.id],
+      (question) => (!question.optional && !answers[question.id]) || keyMissing.includes(question),
     );
     if (missing.length > 0) {
       return {
         ok: false,
         status: 400,
         code: 'answers_required',
-        message: text(
-          current.language,
-          'Ответьте на обязательные вопросы или пропустите их явно.',
-          'Answer the required questions or skip them explicitly.',
-        ),
+        message:
+          keyMissing.length > 0
+            ? text(
+                current.language,
+                'Ответьте на вопросы о том, как устроена работа: без них анализ получится общим. Если точно не знаете — ответьте примерно.',
+                'Answer the questions about how the work is done: without them the analysis stays generic. If you are not sure, answer roughly.',
+              )
+            : text(
+                current.language,
+                'Ответьте на обязательные вопросы или пропустите их явно.',
+                'Answer the required questions or skip them explicitly.',
+              ),
         details: { questionIds: missing.map((question) => question.id) },
       };
     }
@@ -1563,7 +1579,8 @@ export class DiscoveryService {
         return;
       }
       const context = verifyTaskNumbers(result.data, started.inputText);
-      const questions = context.questions;
+      // Минимум фактов: о каждом неизвестном ключевом факте — обязательный вопрос (key-facts.ts).
+      const questions = gateQuestions(context, started.language);
       const after = await this.mutate(caller.userId, id, (analysis) => ({
         ...analysis,
         context,
@@ -1698,7 +1715,14 @@ export class DiscoveryService {
       channels.length > 0 && !offersBot(output.opportunities)
         ? customerBotOffer(analysis.language, channels)
         : null;
-    const drafts = serverBot ? [...output.opportunities, serverBot] : output.opportunities;
+    // Возможность с рецептом личного помощника требует его возможность: пока чат закрыт, она
+    // «пока нет», а не «можно сделать сейчас» (capabilities.ts, personal_assistant).
+    const drafts = (serverBot ? [...output.opportunities, serverBot] : output.opportunities).map(
+      (item) =>
+        item.recipe === 'personal_assistant' && !item.requires.includes('personal_assistant')
+          ? { ...item, requires: [...item.requires, 'personal_assistant' as const] }
+          : item,
+    );
     const built = drafts.map((item, position): Opportunity => {
       const feasibility = assessFeasibility(
         item.requires,

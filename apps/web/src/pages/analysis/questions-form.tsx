@@ -14,13 +14,18 @@ interface Field {
 
 export type FieldState = Record<string, Field>;
 
+/** Вопрос о ключевом факте: ответ нужен, пропуска нет (сервер: discovery/key-facts.ts). */
+function isKeyFact(question: Question): boolean {
+  return Boolean(question.fact) && !question.optional;
+}
+
 function fieldsFrom(questions: Question[], answers: Answers): FieldState {
   const fields: FieldState = {};
   for (const question of questions) {
     const answer = answers[question.id];
     fields[question.id] = {
       value: answer && 'value' in answer ? answer.value : '',
-      skipped: Boolean(answer && 'skipped' in answer),
+      skipped: !isKeyFact(question) && Boolean(answer && 'skipped' in answer),
     };
   }
   return fields;
@@ -93,7 +98,11 @@ export function QuestionsForm({
     event.preventDefault();
     const unanswered = questions
       .filter((question) => !question.optional)
-      .filter((question) => !fields[question.id]?.skipped && !fields[question.id]?.value.trim())
+      .filter(
+        (question) =>
+          (isKeyFact(question) || !fields[question.id]?.skipped) &&
+          !fields[question.id]?.value.trim(),
+      )
       .map((question) => question.id);
     if (unanswered.length > 0) {
       setMissing(unanswered);
@@ -265,33 +274,38 @@ function QuestionField({
 
       {missing ? (
         <p id={errorId} className="text-[13px] text-danger">
-          {t('analysis.questions.needAnswer')}
+          {isKeyFact(question)
+            ? t('analysis.questions.needKeyAnswer')
+            : t('analysis.questions.needAnswer')}
         </p>
       ) : null}
 
-      <div className="flex items-center gap-3 text-[13px]">
-        {field.skipped ? (
-          <>
-            <span className="text-subtle">{t('analysis.questions.skipped')}</span>
+      {/* На вопрос о ключевом факте нужен ответ: кнопки «Пропустить» у него нет. */}
+      {isKeyFact(question) ? null : (
+        <div className="flex items-center gap-3 text-[13px]">
+          {field.skipped ? (
+            <>
+              <span className="text-subtle">{t('analysis.questions.skipped')}</span>
+              <button
+                type="button"
+                className="min-h-11 font-medium text-muted underline underline-offset-4 hover:text-text md:min-h-0"
+                onClick={() => onChange({ skipped: false })}
+              >
+                {t('analysis.questions.unskip')}
+              </button>
+            </>
+          ) : (
             <button
               type="button"
-              className="min-h-11 font-medium text-muted underline underline-offset-4 hover:text-text md:min-h-0"
-              onClick={() => onChange({ skipped: false })}
+              className="min-h-11 text-muted underline underline-offset-4 hover:text-text md:min-h-0"
+              onClick={() => onChange({ skipped: true })}
+              aria-label={`${t('analysis.questions.skip')}: ${question.text}`}
             >
-              {t('analysis.questions.unskip')}
+              {t('analysis.questions.skip')}
             </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="min-h-11 text-muted underline underline-offset-4 hover:text-text md:min-h-0"
-            onClick={() => onChange({ skipped: true })}
-            aria-label={`${t('analysis.questions.skip')}: ${question.text}`}
-          >
-            {t('analysis.questions.skip')}
-          </button>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </li>
   );
 }

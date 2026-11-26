@@ -11,6 +11,7 @@ import type {
 import { useAuth } from '@/features/auth/auth-store';
 import { readDraft, saveDraft } from '@/features/discovery/draft';
 import { setSiteFeatures } from '@/lib/features';
+import { setProductSwitchesForTests } from '@/lib/product-switches';
 import { renderRoute, resetAuth, resetPreferences } from './test-utils';
 
 const QUESTIONS: Question[] = [
@@ -635,7 +636,7 @@ describe('анализ задачи: начало, вопросы, резуль�
         ],
         opportunities: [
           { ...mailCard!, area: 'clients', recipe: null },
-          { ...draftsCard!, area: 'clients', recipe: 'personal_assistant' },
+          { ...draftsCard!, area: 'clients', recipe: 'customer_bot' },
         ],
       }),
     });
@@ -645,9 +646,13 @@ describe('анализ задачи: начало, вопросы, резуль�
     expect(screen.getByText('Прочитали сайт lisa.kz.')).toBeInTheDocument();
     const main = screen.getByText('Рекомендуем начать').closest('li')!;
     expect(within(main).getByRole('heading', { name: 'Черновики ответов' })).toBeInTheDocument();
-    expect(
-      within(main).getByText('Клиенты и переписка · Готовая автоматизация: личный помощник'),
-    ).toBeInTheDocument();
+    // Без служебной подписи «Готовая автоматизация: …»: область и честная метка.
+    expect(within(main).getByText('Клиенты и переписка')).toBeInTheDocument();
+    expect(within(main).queryByText(/Готовая автоматизация/)).not.toBeInTheDocument();
+    expect(within(main).getByText('Запускается сейчас')).toBeVisible();
+    const mail = screen.getByRole('heading', { name: 'Автоответы в почте' }).closest('li')!;
+    expect(within(mail).getByText('Скоро')).toBeVisible();
+    expect(screen.queryByText(/Статус реализуемости считает Ketner/)).not.toBeInTheDocument();
     // Гость: запуск автоматизации — после входа, с возвратом к отчёту.
     expect(
       within(main).getByRole('link', { name: 'Войти и приступить к автоматизации' }),
@@ -722,9 +727,8 @@ describe('анализ задачи: начало, вопросы, резуль�
     renderRoute('/analyses/a1');
 
     const main = (await screen.findByText('Рекомендуем начать')).closest('li')!;
-    expect(
-      within(main).getByText('Документы и отчёты · Готовый инструмент: учебный помощник'),
-    ).toBeInTheDocument();
+    expect(within(main).getByText('Документы и отчёты')).toBeInTheDocument();
+    expect(within(main).getByText('Запускается сейчас')).toBeVisible();
     expect(within(main).getByText(/Создаётся бесплатно/)).toBeInTheDocument();
     expect(within(main).queryByText(/Модель подготовит настройки/)).not.toBeInTheDocument();
     const create = within(main).getByRole('button', { name: 'Создать учебного помощника' });
@@ -751,8 +755,9 @@ describe('анализ задачи: начало, вопросы, резуль�
       'Черновики ответов',
       'Автоответы в почте',
     ]);
-    expect(within(cards[0]).getAllByText('Можно сделать сейчас')[0]).toBeVisible();
-    expect(within(cards[1]).getAllByText('Пока не поддерживается')[0]).toBeVisible();
+    // Готовой автоматизации нет ни у одной: обе «скоро», не «можно сделать сейчас».
+    expect(within(cards[0]).getByText('Скоро')).toBeVisible();
+    expect(within(cards[1]).getByText('Скоро')).toBeVisible();
     expect(within(cards[0]).getAllByText(/≈ 2–4 ч в неделю/)[0]).toBeVisible();
     // Модели — в «Подробнее», а не в статусе этапа.
     expect(screen.queryByText(/готово · GPT-6 Luna/)).not.toBeInTheDocument();
@@ -871,12 +876,10 @@ describe('анализ задачи: начало, вопросы, резуль�
     const supported = screen.getByRole('heading', { name: 'Черновики ответов' }).closest('li')!;
     const unsupported = screen.getByRole('heading', { name: 'Автоответы в почте' }).closest('li')!;
     expect(within(unsupported).queryByRole('button', { name: /план/i })).toBeNull();
-    // «Создать помощника» — только у того, что Ketner умеет; гостю — через вход (в «Подробнее»).
+    // «Создать помощника» у старого анализа — только пока открыт чат: помощник живёт в нём.
     expect(within(unsupported).queryByRole('link', { name: /помощника/ })).toBeNull();
     fireEvent.click(within(supported).getByRole('button', { name: 'Подробнее' }));
-    expect(
-      within(supported).getByRole('link', { name: 'Войти, чтобы создать помощника' }),
-    ).toHaveAttribute('href', '/login?redirect=%2Fanalyses%2Fa1');
+    expect(within(supported).queryByRole('link', { name: /помощника/ })).toBeNull();
     expect(
       within(supported).getByText('Бесплатно для одной возможности этого анализа'),
     ).toBeVisible();
@@ -1011,5 +1014,95 @@ describe('анализ задачи: начало, вопросы, резуль�
     setSiteFeatures(null);
     renderRoute('/analyses/a1');
     expect(screen.queryByRole('heading', { name: 'Анализ задачи' })).toBeNull();
+  });
+  it('чат открыт: личный помощник — главная рекомендация, у старого анализа — «Создать помощника»', async () => {
+    setProductSwitchesForTests({ chat: true });
+    try {
+      const [draftsCard, mailCard] = READY_PATCH.opportunities ?? [];
+      installDiscoveryApi({
+        view: analysis({
+          ...READY_PATCH,
+          coverage: [
+            { area: 'clients', status: 'found', opportunities: 2, note: '' },
+            { area: 'sales', status: 'unclear', opportunities: 0, note: '' },
+            { area: 'content', status: 'unclear', opportunities: 0, note: '' },
+            { area: 'documents', status: 'unclear', opportunities: 0, note: '' },
+            { area: 'routine', status: 'unclear', opportunities: 0, note: '' },
+          ],
+          opportunities: [
+            { ...mailCard!, area: 'clients', recipe: null },
+            { ...draftsCard!, area: 'clients', recipe: 'personal_assistant' },
+          ],
+        }),
+      });
+      renderRoute('/analyses/a1');
+      const main = (await screen.findByText('Рекомендуем начать')).closest('li')!;
+      expect(within(main).getByRole('heading', { name: 'Черновики ответов' })).toBeVisible();
+      expect(within(main).getByText('Запускается сейчас')).toBeVisible();
+    } finally {
+      setProductSwitchesForTests({});
+    }
+  });
+
+  it('чат закрыт: личный помощник из сохранённого отчёта не запускается и не рекомендуется', async () => {
+    const [draftsCard, mailCard] = READY_PATCH.opportunities ?? [];
+    installDiscoveryApi({
+      view: analysis({
+        ...READY_PATCH,
+        coverage: [
+          { area: 'clients', status: 'found', opportunities: 2, note: '' },
+          { area: 'sales', status: 'unclear', opportunities: 0, note: '' },
+          { area: 'content', status: 'unclear', opportunities: 0, note: '' },
+          { area: 'documents', status: 'unclear', opportunities: 0, note: '' },
+          { area: 'routine', status: 'unclear', opportunities: 0, note: '' },
+        ],
+        opportunities: [
+          { ...mailCard!, area: 'clients', recipe: null },
+          { ...draftsCard!, area: 'clients', recipe: 'personal_assistant' },
+        ],
+      }),
+    });
+    renderRoute('/analyses/a1');
+    const drafts = (await screen.findByRole('heading', { name: 'Черновики ответов' })).closest(
+      'li',
+    )!;
+    expect(within(drafts).getByText('Скоро')).toBeVisible();
+    expect(within(drafts).queryByText('Запускается сейчас')).not.toBeInTheDocument();
+    expect(screen.queryByText(/приступить к автоматизации/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /помощника/ })).not.toBeInTheDocument();
+  });
+  it('вопрос о ключевом факте: без «Пропустить», подсказка ответить примерно; результат — после ответа', async () => {
+    const api = installDiscoveryApi({
+      view: analysis({
+        questions: [
+          {
+            id: 'f_vol',
+            text: 'Сколько обращений или заказов у вас примерно?',
+            reason: 'От объёма зависит экономия.',
+            optional: false,
+            kind: 'choice',
+            options: ['До 10 в день', '10–50 в день'],
+            fact: 'volume',
+          },
+        ],
+        // Пропуск из старого черновика ответом не считается.
+        answers: { f_vol: { skipped: true } },
+      }),
+    });
+    renderRoute('/analyses/a1');
+    expect(
+      await screen.findByText('Сколько обращений или заказов у вас примерно?'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /пропустить/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/ответьте примерно/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Показать результат' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '10–50 в день' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Показать результат' }));
+    await waitFor(() =>
+      expect(api.calls.find((call) => call.path.endsWith('/continue'))?.body).toEqual({
+        answers: { f_vol: { value: '10–50 в день' } },
+      }),
+    );
   });
 });

@@ -22,6 +22,7 @@ import {
   TEMPLATE_IDS,
   TEMPLATES,
 } from './templates.js';
+import { setProductSwitchForTests } from '../product-switches.js';
 
 test('реестр шаблонов: id совпадают с ключами, без повторов', () => {
   assert.equal(new Set(TEMPLATE_IDS).size, TEMPLATE_IDS.length);
@@ -136,6 +137,8 @@ test('включённый учебный помощник: возможност
 
 test('рецепт учебного помощника — только задаче, которой нужны документы', (t) => {
   t.after(() => setRolloutForTests(null));
+  setProductSwitchForTests('chat', true);
+  t.after(() => setProductSwitchForTests('chat', false));
   setRolloutForTests({ studyAssistant: true });
   assert.equal(
     acceptedRecipe('study_assistant', 'ready', ['text_generation', 'document_tools']),

@@ -16,12 +16,16 @@ import { ErrorNotice } from './error-notice';
 const ANSWER_MAX = 2000;
 const SAVE_DELAY_MS = 800;
 
-const answered = (record: AnswerRecord | undefined): boolean =>
-  Boolean(record && ('skipped' in record || record.value.trim()));
+/** Вопрос о ключевом факте: ответ нужен, пропуска нет (сервер: discovery/key-facts.ts). */
+const isKeyFact = (question: Question): boolean => Boolean(question.fact) && !question.optional;
+
+/** Есть ли ответ. Пропуск вопроса о ключевом факте ответом не считается. */
+const answered = (question: Question, record: AnswerRecord | undefined): boolean =>
+  Boolean(record && ('skipped' in record ? !isKeyFact(question) : record.value.trim().length > 0));
 
 /** Первый вопрос без ответа; все отвечены — `questions.length` (шаг «Показать результат»). */
 function firstOpen(questions: Question[], answers: Answers): number {
-  const index = questions.findIndex((question) => !answered(answers[question.id]));
+  const index = questions.findIndex((question) => !answered(question, answers[question.id]));
   return index === -1 ? questions.length : index;
 }
 
@@ -92,7 +96,7 @@ export function DiscoveryConversation({
   /** После ответа — следующий вопрос без ответа (вперёд от текущего, потом сначала). */
   const nextAfter = (next: Answers): number => {
     for (let index = current + 1; index < questions.length; index += 1) {
-      if (!answered(next[questions[index].id])) return index;
+      if (!answered(questions[index], next[questions[index].id])) return index;
     }
     return firstOpen(questions, next);
   };
@@ -110,7 +114,7 @@ export function DiscoveryConversation({
       });
   };
 
-  const done = questions.filter((question) => answered(answers[question.id])).length;
+  const done = questions.filter((question) => answered(question, answers[question.id])).length;
   const intro = analysis.context?.intro?.trim() || t('analysis.chat.introFallback');
 
   return (
@@ -131,7 +135,7 @@ export function DiscoveryConversation({
         {questions.map((question, index) => {
           const record = answers[question.id];
           if (index === current) return null;
-          if (!answered(record)) return null;
+          if (!answered(question, record)) return null;
           return (
             <li key={question.id} className="flex flex-col gap-2">
               <KetnerBubble>{question.text}</KetnerBubble>
@@ -353,15 +357,20 @@ function QuestionStep({
           </form>
         ) : null}
 
-        <div>
-          <button
-            type="button"
-            onClick={() => onAnswer({ skipped: true })}
-            className="min-h-11 text-[13px] text-muted underline underline-offset-4 hover:text-text md:min-h-0"
-          >
-            {question.optional ? t('analysis.questions.skip') : t('analysis.chat.dontKnow')}
-          </button>
-        </div>
+        {/* На вопрос о ключевом факте нужен ответ: вместо пропуска — подсказка ответить примерно. */}
+        {isKeyFact(question) ? (
+          <p className="text-[13px] leading-5 text-subtle">{t('analysis.chat.keyHint')}</p>
+        ) : (
+          <div>
+            <button
+              type="button"
+              onClick={() => onAnswer({ skipped: true })}
+              className="min-h-11 text-[13px] text-muted underline underline-offset-4 hover:text-text md:min-h-0"
+            >
+              {question.optional ? t('analysis.questions.skip') : t('analysis.chat.dontKnow')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

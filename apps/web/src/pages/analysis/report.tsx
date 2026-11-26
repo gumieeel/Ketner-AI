@@ -52,6 +52,15 @@ import { ErrorNotice } from './error-notice';
 import { productSwitch } from '@/lib/product-switches';
 import { withoutEndPunctuation } from './report-text';
 
+/**
+ * Запускается ли возможность сейчас: у неё готовая автоматизация, которую человек включит сам.
+ * Личный помощник живёт в чате — пока чат закрыт, его нет, даже у старых анализов.
+ */
+function launchable(item: OpportunityView): boolean {
+  if (item.recipe === 'personal_assistant') return productSwitch('chat');
+  return item.recipe === 'customer_bot' || item.recipe === 'study_assistant';
+}
+
 const FEASIBILITY_TONE: Record<FeasibilityStatus, BadgeTone> = {
   ready: 'success',
   needs_setup: 'info',
@@ -91,7 +100,7 @@ export function Report({
   const sorted = [...analysis.opportunities].sort((a, b) => a.priority - b.priority);
   // Анализ по плану (этап A): главная рекомендация — первая возможность с готовым рецептом.
   const planned = analysis.coverage !== null;
-  const main = planned ? (sorted.find((item) => item.recipe !== null) ?? null) : null;
+  const main = planned ? (sorted.find(launchable) ?? null) : null;
   const opportunities = main ? sorted.filter((item) => item.id !== main.id) : sorted;
   const startWith = sorted
     .filter((item) => item.feasibilityStatus !== 'not_supported' && item.firstStep)
@@ -105,18 +114,15 @@ export function Report({
     featured: boolean,
   ): { row: ReactNode; details: ReactNode } => {
     if (item.feasibilityStatus === 'not_supported') return { row: null, details: null };
-    const solution =
-      item.recipe === 'personal_assistant' ||
-      item.recipe === 'customer_bot' ||
-      item.recipe === 'study_assistant' ? (
-        <SolutionAction
-          analysis={analysis}
-          opportunity={item}
-          builder={builder}
-          primary={featured}
-          start
-        />
-      ) : null;
+    const solution = launchable(item) ? (
+      <SolutionAction
+        analysis={analysis}
+        opportunity={item}
+        builder={builder}
+        primary={featured}
+        start
+      />
+    ) : null;
     const plan = plans ? (
       <PlanAction
         analysis={analysis}
@@ -125,10 +131,12 @@ export function Report({
         secondary={featured ? solution !== null : true}
       />
     ) : null;
-    // Анализ до этапа A (без карты областей): помощник создаётся из любой возможности.
-    const legacy = !planned ? (
-      <SolutionAction analysis={analysis} opportunity={item} builder={builder} />
-    ) : null;
+    // Анализ до этапа A (без карты областей): помощник создаётся из любой возможности — только
+    // пока открыт чат: помощник живёт в нём.
+    const legacy =
+      !planned && productSwitch('chat') ? (
+        <SolutionAction analysis={analysis} opportunity={item} builder={builder} />
+      ) : null;
     const group = (...nodes: ReactNode[]) =>
       nodes.some(Boolean) ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">{nodes}</div>
@@ -211,13 +219,11 @@ export function Report({
               <p className="text-[14px] leading-6 text-text">{t('analysis.result.choose')}</p>
             </div>
           ) : null}
-          <p className="mt-3 text-[13px] leading-5 text-subtle">
-            {t('analysis.report.statusNote')}
-          </p>
         </section>
 
         {combined ? <CombinedEstimate estimate={combined} analysisId={analysis.id} /> : null}
-        {estimates && estimates.items.length > 0 && !combined ? <Disclaimer /> : null}
+        {/* Оговорка о предварительной цене — только у работ команды, не у запуска самому. */}
+        {estimates && estimates.items.some(isTeamWork) && !combined ? <Disclaimer /> : null}
         {analysis.context ? <ProfileEditor analysis={analysis} onChanged={onChanged} /> : null}
 
         <SourceNote analysis={analysis} />
@@ -533,11 +539,9 @@ function OpportunityCard({
             <AreaIconView area={item.area} />
           </span>
           <div className="min-w-0">
-            {item.area || item.recipe ? (
+            {item.area ? (
               <p className="mb-0.5 text-[13px] text-subtle">
-                {item.area ? t(`analysis.map.area.${item.area}` as TranslationKey) : null}
-                {item.area && item.recipe ? ' · ' : null}
-                {item.recipe ? t(`analysis.recipe.${item.recipe}` as TranslationKey) : null}
+                {t(`analysis.map.area.${item.area}` as TranslationKey)}
               </p>
             ) : null}
             <h4
@@ -572,8 +576,9 @@ function OpportunityCard({
                 </li>
               ) : null}
               <li>
-                <Badge tone={FEASIBILITY_TONE[item.feasibilityStatus]}>
-                  {t(`analysis.feasibility.${item.feasibilityStatus}` as TranslationKey)}
+                {/* Честная метка: готовая автоматизация запускается сейчас, остальное — позже. */}
+                <Badge tone={launchable(item) ? 'success' : 'neutral'}>
+                  {launchable(item) ? t('analysis.launch.now') : t('analysis.launch.soon')}
                 </Badge>
               </li>
             </ul>

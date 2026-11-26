@@ -62,6 +62,7 @@ import {
   accountTiers as defaultAccountTiers,
   type AccountTiers,
 } from '../billing/account-tiers.js';
+import { RECIPES } from '../discovery/analysis-map.js';
 
 export interface AnalysesRouterDeps {
   ai: AiConfig;
@@ -141,7 +142,9 @@ export function publicAnalysis(analysis: Analysis, opportunities: Opportunity[] 
       .map(({ ownerId: _owner, analysisId: _analysis, ...item }) => ({
         ...item,
         area: item.area ?? null,
-        recipe: item.recipe ?? null,
+        // Рецепт, который сейчас недоступен (личный помощник при закрытом чате), не предлагается и в
+        // анализах, сохранённых раньше.
+        recipe: item.recipe && RECIPES[item.recipe].available ? item.recipe : null,
       })),
     cost: {
       /** Списано с кредитов пользователя (0 у бесплатного анализа). */

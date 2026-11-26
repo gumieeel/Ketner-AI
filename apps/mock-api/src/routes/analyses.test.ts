@@ -134,7 +134,9 @@ test('без DISCOVERY_ENABLED маршрутов анализа нет', async 
   }
 });
 
-test('гость проходит анализ целиком; чужой гость видит 404; служебные поля не отдаются', async () => {
+test('гость проходит анализ целиком; чужой гость видит 404; служебные поля не отдаются', async (t) => {
+  setProductSwitchForTests('chat', true);
+  t.after(() => setProductSwitchForTests('chat', false));
   const app = await start();
   try {
     const guest = 'guest_httpflow01';
@@ -461,7 +463,9 @@ test('перебор гостевых id: после 30 промахов с ад
   }
 });
 
-test('план по HTTP: бесплатный краткий план, статус шага, чужой — 404', async () => {
+test('план по HTTP: бесплатный краткий план, статус шага, чужой — 404', async (t) => {
+  setProductSwitchForTests('chat', true);
+  t.after(() => setProductSwitchForTests('chat', false));
   const app = await start();
   try {
     const guest = 'guest_planflow01';
@@ -556,5 +560,43 @@ test('план по HTTP: бесплатный краткий план, стат
     assert.equal(foreignStep.status, 404);
   } finally {
     app.close();
+  }
+});
+
+test('чат закрыт: личный помощник в отчёте — «не поддерживается», без рецепта и кнопки создания', async () => {
+  const app = await start();
+  try {
+    const guest = 'guest_nochat0001';
+    const created = await post(app.base, '/api/analyses', { text: TEXT }, guestHeaders(guest));
+    const id = created.json.analysis.id as string;
+    await app.service.whenIdle();
+    await post(
+      app.base,
+      `/api/analyses/${id}/continue`,
+      { answers: { q1: { value: 'В таблицах' } } },
+      guestHeaders(guest),
+    );
+    await app.service.whenIdle();
+    const done = await fetch(`${app.base}/api/analyses/${id}`, { headers: guestHeaders(guest) });
+    const report = ((await done.json()) as ApiBody).analysis;
+    assert.equal(report.status, 'ready');
+    const drafts = (
+      report.opportunities as Array<{
+        title: string;
+        recipe: string | null;
+        requires: string[];
+        feasibilityStatus: string;
+      }>
+    ).find((item) => item.title === 'Черновики типовых текстов');
+    assert.ok(drafts);
+    assert.equal(drafts.recipe, null);
+    assert.equal(drafts.feasibilityStatus, 'not_supported');
+    assert.ok(drafts.requires.includes('personal_assistant'));
+    // Рецепта нет ни у одной возможности, кроме бота для клиентов.
+    for (const item of report.opportunities as Array<{ recipe: string | null }>) {
+      assert.ok(item.recipe === null || item.recipe === 'customer_bot', String(item.recipe));
+    }
+  } finally {
+    await app.close();
   }
 });

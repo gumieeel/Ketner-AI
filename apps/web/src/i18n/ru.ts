@@ -1730,10 +1730,6 @@ export const ru = {
   'analysis.map.found': 'Нашли: {count}',
   'analysis.map.not_relevant': 'Не относится',
   'analysis.map.unclear': 'Мало сведений',
-  'analysis.recipe.personal_assistant': 'Готовая автоматизация: личный помощник',
-  'analysis.recipe.customer_bot': 'Готовая автоматизация: ИИ-агент для клиентов',
-  'analysis.recipe.weekly_content': 'Готовая автоматизация: контент на неделю',
-  'analysis.recipe.study_assistant': 'Готовый инструмент: учебный помощник',
   'analysis.source.read': 'Прочитали сайт {site}.',
   'analysis.source.failed': 'Сайт {site} открыть не удалось — анализ сделан по вашему описанию.',
   'builder.report.start': 'Приступить к автоматизации',
@@ -1748,6 +1744,8 @@ export const ru = {
   'analysis.chat.step': 'Вопрос {number} из {total}',
   'analysis.chat.next': 'Дальше',
   'analysis.chat.dontKnow': 'Не знаю — пропустить',
+  'analysis.chat.keyHint':
+    'Если не знаете точно — выберите ближайший вариант или ответьте примерно. Без этого ответа анализ получится общим.',
   'analysis.chat.skipped': 'Пропущено',
   'analysis.chat.change': 'Изменить',
   'analysis.chat.ready':
@@ -1756,7 +1754,8 @@ export const ru = {
   'analysis.chat.ketner': 'Ketner',
   'analysis.chat.you': 'Вы',
   'analysis.questions.title': 'Несколько уточнений',
-  'analysis.questions.lead': 'Ответы сделают результат точнее. Любой вопрос можно пропустить.',
+  'analysis.questions.lead':
+    'Ответы сделают результат точнее. Если не знаете точно — ответьте примерно.',
   'analysis.questions.optional': 'необязательно',
   'analysis.questions.why': 'Зачем: {reason}',
   'analysis.questions.placeholder': 'Ваш ответ',
@@ -1768,6 +1767,8 @@ export const ru = {
   'analysis.questions.saved': 'Ответы сохранены',
   'analysis.questions.saveFailed': 'Не удалось сохранить черновик — ответы останутся на странице.',
   'analysis.questions.submit': 'Продолжить анализ',
+  'analysis.questions.needKeyAnswer':
+    'Без этого ответа анализ получится общим. Можно ответить примерно.',
   'analysis.questions.needAnswer': 'Ответьте на вопрос или пропустите его.',
 
   'analysis.failed.title': 'Этап «{stage}» не выполнен',
@@ -1838,6 +1839,8 @@ export const ru = {
   'analysis.ready.benefit': 'Польза',
   'analysis.ready.hours': '≈ {from}–{to} ч в неделю',
   'analysis.ready.firstStep': 'Первый шаг',
+  'analysis.launch.now': 'Запускается сейчас',
+  'analysis.launch.soon': 'Скоро',
   'analysis.feasibility.ready': 'Можно сделать сейчас',
   'analysis.feasibility.needs_setup': 'Нужна настройка',
   'analysis.feasibility.needs_integration': 'Нужна интеграция',
@@ -1846,8 +1849,6 @@ export const ru = {
   'analysis.page.allAnalyses': 'Мои анализы',
   'analysis.report.startTitle': 'Ваш план внедрения',
   'analysis.report.opportunitiesTitle': 'Возможности',
-  'analysis.report.statusNote':
-    'Статус реализуемости считает Ketner по тому, что он умеет сейчас и что у вас подключено, а не модель. Экономия времени — прогноз и считается только по числам из вашего описания.',
   'analysis.report.save': 'Сохранить анализ',
   'analysis.report.saved': 'Сохранён',
   'analysis.report.loginToSave': 'Войти, чтобы сохранить',

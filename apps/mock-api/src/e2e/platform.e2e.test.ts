@@ -51,8 +51,17 @@ const CONTEXT = {
   domain: 'Интернет-магазин',
   summary: 'Отвечаю покупателям на однотипные вопросы',
   tasks: [{ id: 't1', title: 'Ответы покупателям', source: 'user' }],
+  recurringProcesses: [{ title: 'Вопрос покупателя', steps: ['Пишет', 'Отвечаю вручную'] }],
+  profile: { customerChannels: ['website'], monthlyRequests: 160 },
   questions: [
-    { id: 'q1', text: 'Где хранятся заказы?', reason: 'Интеграции', optional: false, kind: 'text' },
+    {
+      id: 'q1',
+      text: 'Где хранятся заказы?',
+      reason: 'Интеграции',
+      optional: false,
+      kind: 'text',
+      fact: 'data_location',
+    },
   ],
 };
 const DISCOVERY = {
