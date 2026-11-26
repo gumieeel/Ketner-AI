@@ -103,7 +103,7 @@ import {
   accountTiers as defaultAccountTiers,
   type AccountTiers,
 } from '../billing/account-tiers.js';
-import type { TierUsage } from '../billing/tier-usage.js';
+import { tierEnforced, type TierUsage } from '../billing/tier-usage.js';
 import { startCounterCleanup } from '../billing/cost-counters.js';
 import {
   alertMail,
@@ -192,6 +192,8 @@ export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime 
       discovery: ready.store,
       gateway,
       allowance,
+      // Запуск ИИ-агента для клиентов — при активном тарифе со свободным местом (BUILDER_V1, 8).
+      launchTier: { enforced: tierEnforced, tierOf: (userId) => tiers.tierOf(userId) },
     });
     return builder;
   };
@@ -729,6 +731,19 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
       const result = await builder.activate(caller, String(request.params.id));
       if (!result.ok) return fail(response, result);
       await sendView(builder, caller, response, String(request.params.id));
+    }),
+  );
+
+  // Что мешает запуску (шаг 4 мастера): тесты и тариф, теми же правилами, что `activate`.
+  router.get(
+    '/:id/launch',
+    handle(async (builder, caller, request, response) => {
+      const status = await builder.launchStatus(caller, String(request.params.id));
+      if (!status) {
+        sendError(response, 404, 'not_found', 'Решение не найдено');
+        return;
+      }
+      response.json(status);
     }),
   );
 

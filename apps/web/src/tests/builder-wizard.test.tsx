@@ -4,6 +4,7 @@ import { useAuth } from '@/features/auth/auth-store';
 import type {
   AutomationView,
   BotOverview,
+  LaunchStatus,
   SolutionDetails,
   SolutionView,
 } from '@/features/builder/api';
@@ -196,14 +197,30 @@ function overview(automations = AUTOMATIONS): BotOverview {
 }
 
 /** Сервер для мастера: анализ, список решений, создание, настройки, бот и переключатели. */
-function server(options: { solutions?: SolutionView[]; solution?: SolutionDetails } = {}) {
+function server(
+  options: {
+    solutions?: SolutionView[];
+    solution?: SolutionDetails;
+    launch?: Partial<LaunchStatus>;
+    sheetConnected?: boolean;
+  } = {},
+) {
   let current = options.solution ?? details();
+  const launch: LaunchStatus = {
+    status: 'draft',
+    alreadyRunning: false,
+    readiness: { ready: true },
+    tier: { enforced: true, id: 'start', name: 'Start', active: 0, limit: 1 },
+    blocked: null,
+    canLaunch: true,
+    ...options.launch,
+  };
   let bot = overview();
   return stubFetch((call) => {
     if (call.path === '/api/integrations/google') {
       return json(200, {
-        connected: false,
-        status: null,
+        connected: options.sheetConnected ?? false,
+        status: options.sheetConnected ? 'connected' : null,
         email: null,
         spreadsheetUrl: null,
         lastErrorCode: null,
@@ -231,6 +248,23 @@ function server(options: { solutions?: SolutionView[]; solution?: SolutionDetail
       return json(200, current);
     }
     if (path === '/b1/bot' && call.method === 'GET') return json(200, bot);
+    if (path === '/b1/launch') return json(200, launch);
+    if (path === '/b1/bot/diagram') {
+      return json(200, {
+        nodes: [
+          { id: 'trigger', kind: 'trigger', label: 'Посетитель пишет боту', level: 0, row: 0 },
+        ],
+        edges: [],
+        description: ['Посетитель пишет боту'],
+      });
+    }
+    if (path === '/b1/activate' && call.method === 'POST') {
+      current = {
+        ...current,
+        solution: { ...current.solution, status: 'active', activeVersion: 1 },
+      };
+      return json(200, current);
+    }
     if (path === '/b1/bot' && call.method === 'PUT') {
       const patch = call.body!.automations as Record<string, { enabled?: boolean }>;
       bot = {
@@ -468,7 +502,7 @@ describe('мастер решения: шаги 1–2', () => {
     );
     expect(screen.getByRole('link', { name: 'Далее: запуск' })).toHaveAttribute(
       'href',
-      '/solutions/b1',
+      '/solutions/b1/launch',
     );
   });
 
@@ -484,6 +518,110 @@ describe('мастер решения: шаги 1–2', () => {
     expect(await screen.findByTestId('sheet-needed')).toHaveTextContent(
       '«Заявка → таблица» выключена',
     );
+  });
+
+  it('шаг 4: всё готово — проверки, схема, «Запустить агента» включает и ведёт на страницу агента', async () => {
+    const calls = server({ sheetConnected: true });
+    renderRoute('/solutions/b1/launch');
+
+    const checks = await screen.findByRole('region', { name: 'Перед запуском' });
+    const steps = screen.getByRole('navigation', { name: 'Шаги мастера' });
+    expect(within(steps).getAllByRole('listitem')[3]).toHaveAttribute('aria-current', 'step');
+    const row = (id: string) => checks.querySelector(`[data-check="${id}"]`) as HTMLElement;
+    expect(row('tests')).toHaveAttribute('data-tone', 'ok');
+    expect(row('sheet')).toHaveTextContent('Google Таблица подключена');
+    expect(row('notify')).toHaveAttribute('data-tone', 'ok');
+    expect(row('approvals')).toHaveTextContent('Подтверждать нечего');
+    expect(row('tier')).toHaveTextContent('Тариф Start: работает агентов 0 из 1 — место есть');
+    expect(screen.getByRole('heading', { name: 'Как будет работать агент' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Запустить агента' }));
+    await waitFor(() =>
+      expect(calls.some((call) => call.method === 'POST' && call.path.endsWith('/activate'))).toBe(
+        true,
+      ),
+    );
+    expect(await screen.findByRole('heading', { level: 1, name: 'Лиса' })).toBeVisible();
+  });
+
+  it('шаг 4: нет тарифа — экран «Нужен тариф», кнопки запуска нет, агент остаётся черновиком', async () => {
+    const calls = server({
+      launch: {
+        tier: { enforced: true, id: null, name: null, active: 0, limit: null },
+        blocked: { code: 'tier_required', message: 'Запуск агента — при активном тарифе.' },
+        canLaunch: false,
+      },
+    });
+    renderRoute('/solutions/b1/launch');
+
+    const need = await screen.findByTestId('need-tier');
+    expect(within(need).getByText('Нужен тариф')).toBeVisible();
+    const tiers = need.querySelectorAll('[data-tier]');
+    expect([...tiers].map((item) => item.getAttribute('data-tier'))).toEqual([
+      'start',
+      'growth',
+      'business',
+      'scale',
+    ]);
+    // Самый младший, где есть место для ещё одного агента.
+    expect(within(tiers[0] as HTMLElement).getByText('Подойдёт для этого агента')).toBeVisible();
+    expect(within(tiers[0] as HTMLElement).getByText('$10 в месяц')).toBeVisible();
+    expect(within(need).getByRole('link', { name: 'Тарифы' })).toHaveAttribute('href', '/pricing');
+    expect(within(need).getByText(/остаётся черновиком/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Запустить агента' })).toBeNull();
+    const checks = screen.getByRole('region', { name: 'Перед запуском' });
+    expect(checks.querySelector('[data-check="tier"]')).toHaveAttribute('data-tone', 'block');
+    expect(calls.some((call) => call.method === 'POST')).toBe(false);
+  });
+
+  it('шаг 4: места в тарифе нет — причина с сервера, кнопка неактивна, ссылки на тарифы', async () => {
+    server({
+      launch: {
+        tier: { enforced: true, id: 'start', name: 'Start', active: 1, limit: 1 },
+        blocked: {
+          code: 'solution_limit',
+          message:
+            'Активных решений: 1 из 1 — тариф Start. Чтобы запустить ещё одно, нужен тариф Growth (до 3) — или поставьте на паузу одно из работающих.',
+        },
+        canLaunch: false,
+      },
+    });
+    renderRoute('/solutions/b1/launch');
+    const checks = await screen.findByRole('region', { name: 'Перед запуском' });
+    expect(checks.querySelector('[data-check="tier"]')).toHaveTextContent(
+      /В тарифе нет места.*Активных решений: 1 из 1 — тариф Start/,
+    );
+    const action = screen.getByRole('complementary', { name: 'Запуск агента' });
+    expect(within(action).getByRole('button', { name: 'Запустить агента' })).toBeDisabled();
+    expect(within(action).getByRole('link', { name: 'Тарифы' })).toHaveAttribute(
+      'href',
+      '/pricing',
+    );
+    expect(within(action).getByRole('link', { name: 'Мои автоматизации' })).toHaveAttribute(
+      'href',
+      '/solutions',
+    );
+  });
+
+  it('шаг 4: тесты не пройдены — блокирует; Таблица не подключена — только предупреждение', async () => {
+    server({
+      launch: { readiness: { ready: false, reason: 'not_tested' } as never, canLaunch: false },
+    });
+    renderRoute('/solutions/b1/launch');
+    const checks = await screen.findByRole('region', { name: 'Перед запуском' });
+    const tests = checks.querySelector('[data-check="tests"]') as HTMLElement;
+    expect(tests).toHaveAttribute('data-tone', 'block');
+    expect(
+      within(tests).getByRole('link', { name: 'Открыть тесты на странице агента' }),
+    ).toHaveAttribute('href', '/solutions/b1');
+    const sheet = checks.querySelector('[data-check="sheet"]') as HTMLElement;
+    expect(sheet).toHaveAttribute('data-tone', 'warn');
+    expect(sheet).toHaveTextContent('Запуску не мешает');
+    expect(within(sheet).getByRole('link', { name: 'Подключения' })).toHaveAttribute(
+      'href',
+      '/solutions/b1/connections',
+    );
+    expect(screen.getByRole('button', { name: 'Запустить агента' })).toBeDisabled();
   });
 
   it('тип решения в кабинете — «ИИ-агент для клиентов»', () => {

@@ -108,6 +108,13 @@ const appRoutes: RouteObject[] = [
         ),
       },
       {
+        path: 'solutions/:solutionId/launch',
+        lazy: lazyPage(
+          () => import('@/pages/solutions/wizard/wizard-launch-page'),
+          'WizardLaunchPage',
+        ),
+      },
+      {
         path: 'solutions/:solutionId/setup',
         lazy: lazyPage(
           () => import('@/pages/solutions/wizard/wizard-setup-page'),
