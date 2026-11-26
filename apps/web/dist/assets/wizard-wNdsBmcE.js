@@ -1,1 +1,0 @@
-var e=[`analysis`,`setup`,`connections`,`launch`];function t(e,t){return`/solutions/new?${new URLSearchParams({analysis:e,opportunity:t}).toString()}`}function n(e){return`/solutions/${encodeURIComponent(e)}/setup`}export{n,t as r,e as t};

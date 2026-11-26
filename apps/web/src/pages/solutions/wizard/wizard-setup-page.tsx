@@ -19,7 +19,7 @@ import {
   type BotOverview,
   type SolutionDetails,
 } from '@/features/builder/api';
-import { wizardStartPath } from '@/features/builder/wizard';
+import { wizardConnectionsPath, wizardStartPath } from '@/features/builder/wizard';
 import { DiscoveryApiError } from '@/features/discovery/api';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
@@ -33,7 +33,7 @@ import { WizardFrame } from './wizard-frame';
  * Шаг 2 мастера — «Настройка» бота для клиентов (docs/BUILDER_V1.md, разделы 3, 4 и 12):
  * слева поведение, знания и каталог автоматизаций, справа проба «как клиент» и статистика (до
  * запуска — пустая). Настройки сохраняются версией, как на странице решения; переключатели
- * автоматизаций — сразу. Подключения и запуск (шаги 3–4) пока на странице бота.
+ * автоматизаций — сразу (у запущенного бота это видно рядом с ними). Дальше — шаг 3, подключения.
  */
 export function WizardSetupPage() {
   const { solutionId = '' } = useParams();
@@ -180,12 +180,11 @@ function SetupStep({
         )}
         <div className="flex flex-col items-start gap-1 sm:items-end">
           <Link
-            to={`/solutions/${solution.id}`}
+            to={wizardConnectionsPath(solution.id)}
             className={buttonClasses({ variant: 'primary', size: 'md' })}
           >
-            {t('wizard.next.toBotPage')}
+            {t('wizard.next.toConnections')}
           </Link>
-          <p className="text-[13px] text-subtle">{t('wizard.next.note')}</p>
         </div>
       </div>
     </WizardFrame>
@@ -396,6 +395,7 @@ function SettingsPanel({
           <TabPanel value="automations">
             <AutomationsList
               solutionId={details.solution.id}
+              live={details.solution.status !== 'draft'}
               overview={overview}
               automations={overview.automations}
               onOverview={onOverview}
@@ -455,11 +455,14 @@ const RISK_TONE: Record<AutomationView['risk'], BadgeTone> = {
  */
 function AutomationsList({
   solutionId,
+  live,
   overview,
   automations,
   onOverview,
 }: {
   solutionId: string;
+  /** Бот уже запущен (или на паузе — заявки он принимает): переключатели действуют сразу. */
+  live: boolean;
   overview: BotOverview;
   automations: AutomationView[];
   onOverview: (next: BotOverview) => void;
@@ -484,6 +487,14 @@ function AutomationsList({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[13px] leading-5 text-subtle">{t('wizard.automations.lead')}</p>
+      {live ? (
+        <p
+          className="rounded-xl border border-warning/40 bg-warning-soft/40 px-4 py-2 text-[14px] leading-6 text-text"
+          data-testid="automations-live"
+        >
+          {t('wizard.automations.live')}
+        </p>
+      ) : null}
       <ul className="flex flex-col gap-3">
         {automations.map((item) => {
           const external = item.connections.some(

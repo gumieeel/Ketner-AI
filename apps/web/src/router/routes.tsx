@@ -101,6 +101,13 @@ const appRoutes: RouteObject[] = [
         lazy: lazyPage(() => import('@/pages/solutions/solution-page'), 'SolutionPage'),
       },
       {
+        path: 'solutions/:solutionId/connections',
+        lazy: lazyPage(
+          () => import('@/pages/solutions/wizard/wizard-connections-page'),
+          'WizardConnectionsPage',
+        ),
+      },
+      {
         path: 'solutions/:solutionId/setup',
         lazy: lazyPage(
           () => import('@/pages/solutions/wizard/wizard-setup-page'),
