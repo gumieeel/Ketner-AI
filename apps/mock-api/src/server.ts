@@ -8,6 +8,11 @@ import { initDatabaseSync } from './db/sync.js';
 import { userStore } from './store/index.js';
 import { mailer } from './services/mailer.js';
 import { notificationChannelsLine } from './services/notification-channels.js';
+import { installProcessSafetyNet } from './process-safety.js';
+
+// Первым делом — страховка процесса: временный обрыв соединения с базой (Supabase закрыл его,
+// код 57P01) не роняет сервер; любая другая необработанная ошибка — выход с кодом 1, как раньше.
+installProcessSafetyNet();
 
 // 0. Семантический кэш ответов выключен: файл прежнего кэша (вопросы и ответы открытым текстом)
 // удаляется при старте.
@@ -26,7 +31,13 @@ const app = createApp({
   supportBotService: telegramSupportBotService,
 });
 
-app.listen(config.port, async () => {
+app.listen(config.port, () => {
+  void startRuntime().catch((error: unknown) => {
+    console.error('[mock-api] Ошибка запуска фоновых служб:', error);
+  });
+});
+
+async function startRuntime(): Promise<void> {
   console.log(`[mock-api] ${config.serviceName} слушает http://127.0.0.1:${config.port}`);
   console.log(`[mock-api] контракт API: http://127.0.0.1:${config.port}/api`);
   // Почта и Telegram для уведомлений владельцам (заявки, поломки Google Таблицы, объём тарифа).
@@ -47,4 +58,4 @@ app.listen(config.port, async () => {
       console.error('[mock-api] Ошибка инициализации Telegram Support бота:', error);
     }
   }
-});
+}

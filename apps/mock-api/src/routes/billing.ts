@@ -168,11 +168,15 @@ export function createBillingRouter({
       if (!pack.duplicate) {
         const credits = Math.round(pack.credit.amountUsd * 1000);
         const bonus = pack.bonus ? Math.round(pack.bonus.amountUsd * 1000) : 0;
-        void billing.telegram?.notifyUser(
-          invoice.userId,
-          `✅ Оплата криптовалютой получена: начислили <b>${credits.toLocaleString('ru-RU')}</b> кредитов${bonus > 0 ? ` и бонус <b>+${bonus.toLocaleString('ru-RU')}</b>` : ''} до <b>${new Date(pack.credit.expiresAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</b>.`,
-          'receipt',
-        );
+        void billing.telegram
+          ?.notifyUser(
+            invoice.userId,
+            `✅ Оплата криптовалютой получена: начислили <b>${credits.toLocaleString('ru-RU')}</b> кредитов${bonus > 0 ? ` и бонус <b>+${bonus.toLocaleString('ru-RU')}</b>` : ''} до <b>${new Date(pack.credit.expiresAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</b>.`,
+            'receipt',
+          )
+          .catch((error: unknown) => {
+            console.error(`[billing] чек в Telegram для ${invoice.userId} не отправлен`, error);
+          });
       }
       return {
         invoice: updated,
@@ -193,11 +197,15 @@ export function createBillingRouter({
         day: 'numeric',
         month: 'long',
       });
-      void billing.telegram?.notifyUser(
-        invoice.userId,
-        `✅ Оплата криптовалютой получена: тариф <b>${planLabel(invoice.planId)}</b> действует до <b>${until}</b>.`,
-        'receipt',
-      );
+      void billing.telegram
+        ?.notifyUser(
+          invoice.userId,
+          `✅ Оплата криптовалютой получена: тариф <b>${planLabel(invoice.planId)}</b> действует до <b>${until}</b>.`,
+          'receipt',
+        )
+        .catch((error: unknown) => {
+          console.error(`[billing] чек в Telegram для ${invoice.userId} не отправлен`, error);
+        });
     }
     return { invoice: updated, subscription: result.subscription, user: result.user };
   };
