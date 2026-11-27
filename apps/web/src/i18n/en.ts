@@ -2784,6 +2784,7 @@ export const en: Record<TranslationKey, string> = {
   'profile.industry.food': 'Food service',
   'profile.industry.medical': 'Medical',
   'profile.industry.logistics': 'Logistics',
+  'profile.industry.real_estate': 'Real estate',
   'profile.industry.other': 'Other',
   'profile.channel.whatsapp': 'WhatsApp',
   'profile.channel.instagram': 'Instagram',

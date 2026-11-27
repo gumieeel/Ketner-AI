@@ -87,6 +87,7 @@ import {
 import type { DiscoveryStore } from './store.js';
 import { contextTemplate, discoveryTemplate, planTemplate } from './templates.js';
 import { gateQuestions, needsKeyAnswer } from './key-facts.js';
+import { playbookFor, playbookForPrompt } from './playbooks/index.js';
 import type {
   Analysis,
   AnswerRecord,
@@ -1628,7 +1629,15 @@ export class DiscoveryService {
             ? await this.deps.workCatalog(started.language).catch(() => undefined)
             : undefined,
         ),
-        userMessage: discoveryUserMessage(started.language, context, answers),
+        userMessage: discoveryUserMessage(
+          started.language,
+          context,
+          answers,
+          playbookForPrompt(
+            playbookFor(context.profile?.industry, context.profile?.businessModel),
+            started.language,
+          ),
+        ),
         schema: discoveryOutputSchema,
         templateOutput: discoveryTemplate(started.language),
       });
