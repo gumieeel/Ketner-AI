@@ -26,7 +26,7 @@
 
 ## Быстрый старт
 
-**Требования:** Node.js 22.12+ (рекомендуется 24, как в `Dockerfile`), npm 10+.
+**Требования:** Node.js 24 (как в CI, `Dockerfile` и `.node-version`), npm 10+.
 
 ```bash
 npm install

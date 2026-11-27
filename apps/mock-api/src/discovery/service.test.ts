@@ -1110,3 +1110,34 @@ test('модель уже предложила бота для клиентов 
   assert.ok(bot, 'бот всё равно предложен');
   assert.notEqual(ranked[0]?.id, bot.id);
 });
+
+test('база недоступна: этап упал и отметка о сбое не записалась — отказ пойман, процесс жив', async (t) => {
+  const { service, store } = setup({ script: { context: CONTEXT_NO_QUESTIONS } });
+  const rejections: unknown[] = [];
+  const onRejection = (reason: unknown) => rejections.push(reason);
+  process.on('unhandledRejection', onRejection);
+  const logged: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => logged.push(args.map(String).join(' '));
+  t.after(() => {
+    process.off('unhandledRejection', onRejection);
+    console.error = original;
+  });
+  // Любая запись анализа отклоняется, как при обрыве соединения (Supabase, код 57P01).
+  store.update = () =>
+    Promise.reject(
+      Object.assign(new Error('terminating connection due to administrator command'), {
+        code: '57P01',
+      }),
+    );
+  const caller = guest();
+  const created = await create(service, caller, { text: LONG });
+  assert.equal(created.ok, true);
+  await service.whenIdle();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(rejections, []);
+  assert.ok(
+    logged.some((line) => /\[discovery\] .*отметка о сбое этапа context не записана/.test(line)),
+    logged.join('\n'),
+  );
+});

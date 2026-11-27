@@ -5,8 +5,8 @@
  */
 
 import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
 import * as schema from './schema.js';
+import { createQueryClient } from './connection.js';
 import { config } from '../config.js';
 
 const connectionString =
@@ -14,13 +14,8 @@ const connectionString =
   process.env.DATABASE_URL ||
   'postgresql://postgres:postgres@localhost:5432/ketner';
 
-// Используем postgres.js для подключения
-export const queryClient = postgres(connectionString, {
-  max: 10, // pool size
-  idle_timeout: 30, // закрывать неиспользуемые подключения
-  connect_timeout: 10,
-  onnotice: () => {},
-});
+// Используем postgres.js для подключения (настройки — db/connection.ts)
+export const queryClient = createQueryClient(connectionString);
 
 // Экспортируем Drizzle instance с типизацией
 export const db = drizzle(queryClient, { schema });
