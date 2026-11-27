@@ -8,6 +8,8 @@ import { contextUserMessage } from './prompts.js';
 import { createAnalysisBodySchema, discoveryOutputSchema } from './schemas.js';
 import { DiscoveryService, type DiscoveryCaller } from './service.js';
 import { extractPage, isBlockedAddress, readSite, type SiteResult } from './site-reader.js';
+import type { CrawlResult } from './site-crawl.js';
+import { publicAnalysis } from '../routes/analyses.js';
 import { findSiteUrl } from './site-url.js';
 import { MemoryDiscoveryStore } from './store.js';
 import { setProductSwitchForTests } from '../product-switches.js';
@@ -284,7 +286,7 @@ const DISCOVERY = JSON.stringify({
   ],
 });
 
-function setup(readSiteImpl?: (url: string) => Promise<SiteResult>) {
+function setup(readSiteImpl?: (url: string) => Promise<SiteResult | CrawlResult>) {
   const requests: GatewayRequest[] = [];
   const gateway = {
     async stream(request: GatewayRequest, callbacks: GatewayStreamCallbacks) {
@@ -408,4 +410,55 @@ test('сайт не открылся — анализ идёт по тексту
     { ok: false, url: 'https://lisa.kz/' },
   );
   assert.doesNotMatch(requests[0]?.messages[0]?.content ?? '', /<site_data>/);
+});
+
+test('несколько страниц сайта: факты — в промпте разбора, страницы — в анализе, «Разбор сайта» — в ответе API', async () => {
+  const { service, requests } = setup(async (url) => ({
+    ok: true,
+    url,
+    title: 'Лиса — одежда',
+    description: 'Доставка по Казахстану',
+    text: '## / — Лиса\nОдежда\n\n## /kontakty — Контакты\nАдрес: центр',
+    pages: [
+      { path: '/', title: 'Лиса' },
+      { path: '/kontakty', title: 'Контакты' },
+    ],
+    facts: [
+      { kind: 'form', value: 'name,phone', page: '/kontakty', evidence: 'форма: Отправить' },
+      { kind: 'channel', value: 'phone', page: '/kontakty', evidence: 'tel:+77001234567' },
+    ],
+  }));
+  const created = await service.create({
+    caller: { ...caller, userId: 'guest_plan00003', ipHash: 'ip-plan-3' },
+    email: null,
+    text: 'Магазин одежды, сайт lisa.kz',
+    language: 'ru',
+    idempotencyKey: null,
+  });
+  if (!created.ok) return assert.fail('не создан');
+  await service.whenIdle();
+  const prompt = requests[0]?.messages[0]?.content ?? '';
+  assert.match(prompt, /Факты со страниц:\n- form: name,phone \(\/kontakty\)/);
+  assert.match(prompt, /## \/kontakty — Контакты/);
+  const view = await service.get('guest_plan00003', created.analysis.id);
+  assert.ok(view);
+  const source = view.analysis.source;
+  assert.equal(source?.ok && source.pages?.length, 2);
+  const api = publicAnalysis(view.analysis, view.opportunities).source as {
+    pages: string[];
+    review: Array<{ rule: string; page: string }>;
+  };
+  assert.deepEqual(api.pages, ['/', '/kontakty']);
+  assert.deepEqual(
+    api.review.map((item) => [item.rule, item.page]),
+    [
+      ['form_without_instant_reply', '/kontakty'],
+      ['no_prices', '/'],
+      ['phone_only', '/kontakty'],
+      ['no_hours', '/kontakty'],
+    ],
+  );
+  // Факты и текст сайта наружу не отдаются — только пути и находки.
+  assert.ok(!('facts' in api));
+  assert.ok(!('text' in api));
 });

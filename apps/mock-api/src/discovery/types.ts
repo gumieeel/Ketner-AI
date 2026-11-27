@@ -1,3 +1,4 @@
+import type { SiteFact } from './site-facts.js';
 import type { Language } from '../types.js';
 import type { CapabilityId } from './capabilities.js';
 import type { Feasibility, FeasibilityStatus } from './feasibility.js';
@@ -157,5 +158,22 @@ export interface Plan {
 
 /** Прочитанный сайт: текст хранится, чтобы повтор этапа не открывал сайт заново. */
 export type SiteSource =
-  | { url: string; ok: true; title: string; description: string; text: string; fetchedAt: string }
+  | {
+      url: string;
+      ok: true;
+      title: string;
+      description: string;
+      /** Текст прочитанных страниц для модели (до 16 000 символов). */
+      text: string;
+      fetchedAt: string;
+      /** Прочитанные страницы, главная первой (анализы до чтения нескольких страниц — без поля). */
+      pages?: SiteSourcePage[];
+      /** Факты с сайта с доказательствами (discovery/site-facts.ts). */
+      facts?: SiteFact[];
+    }
   | { url: string; ok: false; reason: string; fetchedAt: string };
+
+export interface SiteSourcePage {
+  path: string;
+  title: string;
+}

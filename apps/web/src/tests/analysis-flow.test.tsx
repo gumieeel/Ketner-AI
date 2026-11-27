@@ -1105,4 +1105,57 @@ describe('анализ задачи: начало, вопросы, резуль�
       }),
     );
   });
+  it('сайт прочитан: число страниц и «Что мы увидели на вашем сайте» со ссылкой на страницу', async () => {
+    installDiscoveryApi({
+      view: analysis({
+        ...READY_PATCH,
+        source: {
+          url: 'https://www.lisa.kz/',
+          ok: true,
+          title: 'Лиса',
+          pages: ['/', '/uslugi', '/kontakty'],
+          review: [
+            {
+              rule: 'form_without_instant_reply',
+              text: 'Заявки с формы ждут, пока им ответят вручную: мгновенного ответа на сайте нет.',
+              page: '/kontakty',
+            },
+            {
+              rule: 'no_hours',
+              text: 'Часы работы не указаны: непонятно, когда ответят.',
+              page: '/',
+            },
+          ],
+        },
+      }),
+    });
+    renderRoute('/analyses/a1');
+    const section = (
+      await screen.findByRole('heading', { name: 'Что мы увидели на вашем сайте' })
+    ).closest('section')!;
+    expect(within(section).getByText(/ждут, пока им ответят вручную/)).toBeVisible();
+    expect(within(section).getByRole('link', { name: '/kontakty' })).toHaveAttribute(
+      'href',
+      'https://www.lisa.kz/kontakty',
+    );
+    expect(within(section).getByRole('link', { name: 'главная' })).toHaveAttribute(
+      'href',
+      'https://www.lisa.kz/',
+    );
+    expect(screen.getByText('Прочитали страниц сайта lisa.kz: 3.')).toBeInTheDocument();
+  });
+
+  it('старый анализ (одна главная, без разбора) — прежняя строка и без раздела', async () => {
+    installDiscoveryApi({
+      view: analysis({
+        ...READY_PATCH,
+        source: { url: 'https://www.lisa.kz/', ok: true, title: 'Лиса' },
+      }),
+    });
+    renderRoute('/analyses/a1');
+    expect(await screen.findByText('Прочитали сайт lisa.kz.')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Что мы увидели на вашем сайте' }),
+    ).not.toBeInTheDocument();
+  });
 });

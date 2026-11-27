@@ -133,6 +133,14 @@
       "changefreq": "yearly"
     },
     {
+      "path": "/bot",
+      "name": "KetnerBot",
+      "title": "KetnerBot — кто читает ваш сайт",
+      "description": "KetnerBot открывает до 10 страниц сайта, только когда его владелец просит Ketner AI разобрать свой бизнес. Соблюдает robots.txt, не обходит сайты по расписанию.",
+      "priority": 0.1,
+      "changefreq": "yearly"
+    },
+    {
       "path": "/terms",
       "name": "Пользовательское соглашение",
       "title": "Пользовательское соглашение — Ketner AI",

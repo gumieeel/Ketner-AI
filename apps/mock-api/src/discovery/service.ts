@@ -32,7 +32,8 @@ import {
 } from './budget.js';
 import { acceptedRecipe, normalizeCoverage } from './analysis-map.js';
 import { assessFeasibility, feasibilityRank, type UserCapabilities } from './feasibility.js';
-import { readSite, type SiteResult } from './site-reader.js';
+import { type SiteResult } from './site-reader.js';
+import { crawlSite, type CrawlResult } from './site-crawl.js';
 import { findSiteUrl } from './site-url.js';
 import { estimateImpact, verifyTaskNumbers } from './impact.js';
 import {
@@ -125,7 +126,8 @@ export interface DiscoveryServiceDeps {
   /** Таймаут ответа провайдера, мс. */
   providerTimeoutMs?: number;
   /** Чтение сайта по ссылке из описания (по умолчанию — настоящий запрос с защитой от SSRF). */
-  readSite?: (url: string) => Promise<SiteResult>;
+  /** Чтение сайта (по умолчанию — до 10 страниц, site-crawl.ts); в тестах — подмена. */
+  readSite?: (url: string) => Promise<SiteResult | CrawlResult>;
   /**
    * Каталог работ по внедрению для промпта поиска возможностей — из действующей версии настроек
    * смет (pricing/service.ts). Нет — каталог по умолчанию.
@@ -1682,21 +1684,29 @@ export class DiscoveryService {
     ownerId: string,
     id: string,
     analysis: Analysis,
-  ): Promise<{ url: string; title: string; description: string; text: string } | null> {
+  ): Promise<Extract<SiteSource, { ok: true }> | null> {
     if (analysis.source) return analysis.source.ok ? analysis.source : null;
     const url = findSiteUrl(analysis.inputText);
     if (!url) return null;
-    const result = await (this.deps.readSite ?? readSite)(url).catch((): SiteResult => ({
+    const result = await (this.deps.readSite ?? crawlSite)(url).catch((): SiteResult => ({
       ok: false,
       url,
       reason: 'unreachable',
     }));
     const fetchedAt = this.now().toISOString();
     const source: SiteSource = result.ok
-      ? { ...result, fetchedAt }
+      ? {
+          url: result.url,
+          ok: true,
+          title: result.title,
+          description: result.description,
+          text: result.text,
+          fetchedAt,
+          ...('pages' in result ? { pages: result.pages, facts: result.facts } : {}),
+        }
       : { url: result.url, ok: false, reason: result.reason, fetchedAt };
     await this.mutate(ownerId, id, (current) => ({ ...current, source }));
-    return result.ok ? result : null;
+    return source.ok ? source : null;
   }
 
   private buildOpportunities(
