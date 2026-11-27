@@ -30,11 +30,19 @@ export function contextTemplate(inputText: string, language: Language): string {
         source: 'inferred',
       },
     ],
-    recurringProcesses: [],
-    tools: [],
+    // Демо изображает подробное описание: ключевые факты (key-facts.ts) известны, кроме канала
+    // в коротком описании — о нём демо спрашивает (q1). Без модели описание никто не читает.
+    recurringProcesses: [
+      {
+        title: en ? 'A request now' : 'Заявка сейчас',
+        steps: en
+          ? ['A client writes', 'You reply by hand', 'The order goes into a spreadsheet']
+          : ['Клиент пишет', 'Вы отвечаете вручную', 'Заказ записывается в таблицу'],
+      },
+    ],
+    tools: [{ text: en ? 'Spreadsheets' : 'Таблицы', source: 'inferred' }],
     constraints: [],
     availableData: [],
-    // Демо: профиль только с тем, что нельзя выдумать, — пустые поля честно пустые.
     profile: {
       businessName: null,
       industry: null,
@@ -43,9 +51,9 @@ export function contextTemplate(inputText: string, language: Language): string {
       businessModel: null,
       website: null,
       teamSize: null,
-      customerChannels: [],
+      customerChannels: short ? [] : ['website'],
       existingTools: [],
-      monthlyRequests: null,
+      monthlyRequests: 300,
       monthlyOrders: null,
       catalogPositions: null,
       additionalContext: null,
@@ -78,6 +86,7 @@ export function contextTemplate(inputText: string, language: Language): string {
             options: en
               ? ['WhatsApp', 'Instagram', 'Telegram', 'Website', 'Other channels']
               : ['WhatsApp', 'Instagram', 'Telegram', 'Сайт', 'Другие каналы'],
+            fact: 'channels',
           },
           {
             id: 'q2',

@@ -21,6 +21,11 @@ export interface Question {
   optional: boolean;
   kind: 'text' | 'choice';
   options?: string[];
+  /**
+   * Вопрос о ключевом факте (где пишут клиенты, что после заявки, объёмы, где данные): ответ нужен,
+   * пропуска нет — без него анализ получится общим. У старых анализов поля нет.
+   */
+  fact?: 'channels' | 'after_request' | 'volume' | 'data_location' | null;
 }
 
 export type AnswerRecord = { skipped: true } | { value: string };

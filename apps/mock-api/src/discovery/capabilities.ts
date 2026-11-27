@@ -50,6 +50,7 @@ export interface Capability {
 export const CAPABILITY_IDS = [
   'text_generation',
   'customer_bot_page',
+  'personal_assistant',
   'document_text',
   'document_tools',
   'image_generation',
@@ -78,9 +79,40 @@ export const CAPABILITIES: Readonly<Record<CapabilityId, Capability>> = {
     id: 'text_generation',
     availability: 'available',
     label: { ru: 'Тексты и ответы ИИ', en: 'AI text and answers' },
-    hint: {
-      ru: 'Помощник или ИИ-агент для клиентов в разделе «Мои автоматизации».',
-      en: 'An assistant or an AI agent for customers in the My automations section.',
+    get hint() {
+      return productSwitch('chat')
+        ? {
+            ru: 'Помощник или ИИ-агент для клиентов в разделе «Мои автоматизации».',
+            en: 'An assistant or an AI agent for customers in the My automations section.',
+          }
+        : {
+            ru: 'ИИ-агент для клиентов в разделе «Мои автоматизации».',
+            en: 'An AI agent for customers in the My automations section.',
+          };
+    },
+  },
+  // Личный помощник — работа для самого человека и его сотрудников (черновики писем, ответов,
+  // документов, сводки для них). Работает в чате Ketner: пока чат закрыт (product-switches.ts),
+  // помощника нет — ни в рецептах, ни в выполнимости, ни кнопкой в отчёте.
+  personal_assistant: {
+    id: 'personal_assistant',
+    get availability() {
+      return productSwitch('chat') ? 'available' : 'unavailable';
+    },
+    label: {
+      ru: 'Помощник вам и сотрудникам: черновики',
+      en: 'An assistant for you and your staff: drafts',
+    },
+    get hint() {
+      return productSwitch('chat')
+        ? {
+            ru: 'Помощник в разделе «Мои автоматизации».',
+            en: 'An assistant in the My automations section.',
+          }
+        : {
+            ru: 'Появится позже: сейчас Ketner запускает ИИ-агентов для клиентов.',
+            en: 'Coming later: for now Ketner launches AI agents for customers.',
+          };
     },
   },
   // Бот для клиентов (рецепт customer_bot): своя страница, ссылка, QR-код, кнопка на сайте.

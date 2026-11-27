@@ -27,6 +27,7 @@ import { createUserStore } from '../store/user-store.js';
 import { UsageStore } from '../store/usage-store.js';
 import { memoryToolStores } from '../testing/builder-fixtures.js';
 import { isCodeMail, rememberCodeMails, signupAndVerify } from '../testing/signup.js';
+import { setProductSwitchForTests } from '../product-switches.js';
 
 const base = JSON.parse(discoveryTemplate('ru')) as {
   opportunities: Array<Record<string, unknown>>;
@@ -480,7 +481,9 @@ test('учебный помощник из галереи: инструмент 
   }
 });
 
-test('создание из обеих точек входа — без подписки (прежняя подписка «Автоматизации» снята); остальное — как раньше', async () => {
+test('создание из обеих точек входа — без подписки (прежняя подписка «Автоматизации» снята); остальное — как раньше', async (t) => {
+  setProductSwitchForTests('chat', true);
+  t.after(() => setProductSwitchForTests('chat', false));
   setRolloutForTests({ studyAssistant: true });
   const broke = new Set<string>();
   const app = await start({ broke });

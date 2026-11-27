@@ -9,6 +9,7 @@
  */
 
 import type { Language } from '../types.js';
+import { productSwitch } from '../product-switches.js';
 import { rollout } from '../services/rollout.js';
 import type { CapabilityId } from './capabilities.js';
 import type { FeasibilityStatus } from './feasibility.js';
@@ -90,7 +91,11 @@ export interface Recipe {
 export const RECIPES: Readonly<Record<RecipeId, Recipe>> = {
   personal_assistant: {
     id: 'personal_assistant',
-    available: true,
+    // Помощник работает в чате Ketner: пока чат закрыт, рецепта нет (модель его не видит, сервер
+    // снимает его с возможностей, в том числе с уже сохранённых).
+    get available() {
+      return productSwitch('chat');
+    },
     label: { ru: 'Личный помощник', en: 'Personal assistant' },
     description: {
       ru: 'помощник в чате Ketner со знаниями и стилем человека: пишет письма, КП, документы, ответы, посты по запросу',

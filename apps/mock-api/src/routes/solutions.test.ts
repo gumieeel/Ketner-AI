@@ -19,6 +19,7 @@ import { createSubscriptionStore } from '../store/subscription-store.js';
 import { createUserStore } from '../store/user-store.js';
 import { UsageStore } from '../store/usage-store.js';
 import { isCodeMail, rememberCodeMails, signupAndVerify } from '../testing/signup.js';
+import { setProductSwitchForTests } from '../product-switches.js';
 
 /** Шлюз на демо-шаблонах: этапы анализа, черновик, судья и ответы помощника. */
 const templateGateway = {
@@ -104,7 +105,9 @@ async function signup(base: string, email: string): Promise<string> {
   return ((await response.json()) as { token: string }).token;
 }
 
-test('Builder по HTTP: только после входа; помощник из возможности, тесты, включение, чат; чужой — 404', async () => {
+test('Builder по HTTP: только после входа; помощник из возможности, тесты, включение, чат; чужой — 404', async (t) => {
+  setProductSwitchForTests('chat', true);
+  t.after(() => setProductSwitchForTests('chat', false));
   const app = await start();
   try {
     const anonymous = await fetch(`${app.base}/api/solutions`);

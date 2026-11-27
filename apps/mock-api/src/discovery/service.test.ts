@@ -35,6 +35,9 @@ const CONTEXT_WITH_QUESTIONS = JSON.stringify({
       source: 'user',
     },
   ],
+  // Ключевые факты известны, кроме того, где хранятся заказы: о нём вопрос (key-facts.ts).
+  recurringProcesses: [{ title: 'Вопрос покупателя', steps: ['Пишет', 'Отвечаю вручную'] }],
+  profile: { customerChannels: ['website'], monthlyRequests: 160 },
   questions: [
     {
       id: 'q1',
@@ -42,6 +45,7 @@ const CONTEXT_WITH_QUESTIONS = JSON.stringify({
       reason: 'Интеграции',
       optional: false,
       kind: 'text',
+      fact: 'data_location',
     },
   ],
 });
@@ -58,6 +62,9 @@ const CONTEXT_NO_QUESTIONS = JSON.stringify({
       source: 'user',
     },
   ],
+  recurringProcesses: [{ title: 'Вопрос покупателя', steps: ['Пишет', 'Отвечаю вручную'] }],
+  tools: [{ text: 'Таблицы', source: 'user' }],
+  profile: { customerChannels: ['website'], monthlyRequests: 160 },
 });
 const DISCOVERY = JSON.stringify({
   summary: 'Больше всего поможет ИИ в ответах покупателям.',
@@ -1070,7 +1077,9 @@ test('бот добавляется при любом неподдерживае
   );
 });
 
-test('модель уже предложила бота для клиентов — второй не добавляется; есть другое «можно сейчас» для клиентов — бот не первый', async () => {
+test('модель уже предложила бота для клиентов — второй не добавляется; есть другое «можно сейчас» для клиентов — бот не первый', async (t) => {
+  setProductSwitchForTests('chat', true);
+  t.after(() => setProductSwitchForTests('chat', false));
   const withBot = JSON.parse(MESSENGERS_ONLY) as { opportunities: Array<Record<string, unknown>> };
   withBot.opportunities.push({
     title: 'Бот для покупателей',
@@ -1109,6 +1118,51 @@ test('модель уже предложила бота для клиентов 
   const bot = ranked.find((item) => item.recipe === 'customer_bot');
   assert.ok(bot, 'бот всё равно предложен');
   assert.notEqual(ranked[0]?.id, bot.id);
+});
+
+test('минимум фактов: тонкий разбор — поиск возможностей ждёт ответов; пропуск ключевого вопроса не принимается', async () => {
+  const thinContext = JSON.stringify({
+    domain: 'Магазин',
+    summary: 'Продаём одежду',
+    tasks: [{ id: 't1', title: 'Ответы покупателям', source: 'user' }],
+  });
+  const { service } = setup({ script: { context: thinContext } });
+  const caller = guest();
+  const created = await create(service, caller, { text: LONG });
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  await service.whenIdle();
+  const waiting = await service.get(caller.userId, created.analysis.id);
+  assert.equal(waiting?.analysis.status, 'needs_answers', 'длинный текст не отменяет вопросы');
+  const ids = waiting?.analysis.questions.map((question) => question.id) ?? [];
+  assert.deepEqual(ids, ['f_chan', 'f_flow', 'f_vol', 'f_data']);
+
+  const skipped = await service.continue(caller, created.analysis.id, {
+    answers: {
+      f_chan: { value: 'WhatsApp' },
+      f_flow: { skipped: true },
+      f_vol: { value: '  ' },
+      f_data: { value: 'В таблице' },
+    },
+  });
+  assert.equal(skipped.ok, false);
+  if (!skipped.ok) {
+    assert.equal(skipped.code, 'answers_required');
+    assert.deepEqual(skipped.details?.questionIds, ['f_flow', 'f_vol']);
+    assert.match(skipped.message, /анализ получится общим/);
+  }
+  const answered = await service.continue(caller, created.analysis.id, {
+    answers: {
+      f_chan: { value: 'WhatsApp' },
+      f_flow: { value: 'Отвечаю сам' },
+      f_vol: { value: '10–50 в день' },
+      f_data: { value: 'В таблице' },
+    },
+  });
+  assert.equal(answered.ok, true);
+  await service.whenIdle();
+  const done = await service.get(caller.userId, created.analysis.id);
+  assert.equal(done?.analysis.status, 'ready');
 });
 
 test('база недоступна: этап упал и отметка о сбое не записалась — отказ пойман, процесс жив', async (t) => {

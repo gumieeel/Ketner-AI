@@ -5,8 +5,12 @@ import { DiscoveryService } from '../discovery/service.js';
 import { MemoryDiscoveryStore } from '../discovery/store.js';
 import { BENCH_TASKS, dryGateway, runTask, summarize } from './benchmark-discovery.js';
 import { unlimitedAllowance } from '../billing/build-allowance.js';
+import { setProductSwitchForTests } from '../product-switches.js';
 
-test('замер качества: 20 задач на русском, половина с числами; прогон на шаблонах считает метрики', async () => {
+test('замер качества: 20 задач на русском, половина с числами; прогон на шаблонах считает метрики', async (t) => {
+  // Шаблонный отчёт начинается с личного помощника; замер качества — при открытом чате.
+  setProductSwitchForTests('chat', true);
+  t.after(() => setProductSwitchForTests('chat', false));
   assert.equal(BENCH_TASKS.length, 20);
   assert.equal(new Set(BENCH_TASKS.map((task) => task.id)).size, 20);
   assert.ok(BENCH_TASKS.filter((task) => task.numbers).length >= 8);

@@ -83,8 +83,11 @@ describe('тексты о продукте', () => {
       expect(text).not.toMatch(/[Бб]от[а-я]* для клиентов|customer bots?\b/);
     }
     expect(implementation).toMatch(/ИИ-агент для клиентов, личный помощник/);
-    expect(ru['analysis.recipe.customer_bot']).toBe('Готовая автоматизация: ИИ-агент для клиентов');
-    expect(en['analysis.recipe.customer_bot']).toBe('Ready automation: AI agent for customers');
+    // Отчёт без служебных подписей: вместо «Готовая автоматизация: …» — честная метка.
+    expect(Object.keys(ru).some((key) => key.startsWith('analysis.recipe.'))).toBe(false);
+    expect(ru['analysis.launch.now']).toBe('Запускается сейчас');
+    expect(ru['analysis.launch.soon']).toBe('Скоро');
+    expect(en['analysis.launch.now']).toBe('Launches now');
     // Схема в кабинете: заголовок и подпись для экранных дикторов.
     expect(ru['builder.bot.diagram.title']).toBe('Как работает агент');
     expect(en['builder.bot.diagram.title']).toBe('How the agent works');

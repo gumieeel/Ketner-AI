@@ -68,6 +68,13 @@ export const contextTaskSchema = z.object({
   source,
 });
 
+/**
+ * Ключевые факты, без которых анализ получается общим (discovery/key-facts.ts): где пишут клиенты,
+ * что происходит после заявки, какие объёмы, где хранятся заявки и данные.
+ */
+export const KEY_FACTS = ['channels', 'after_request', 'volume', 'data_location'] as const;
+export type KeyFact = (typeof KEY_FACTS)[number];
+
 export const questionSchema = z.object({
   id: requiredText(8),
   text: requiredText(220),
@@ -76,6 +83,8 @@ export const questionSchema = z.object({
   optional: z.boolean().catch(true),
   kind: z.enum(['text', 'choice']).catch('text'),
   options: list(requiredText(80), 6).optional(),
+  /** О каком ключевом факте вопрос; null — о другом. На такой вопрос нужен ответ, пропуска нет. */
+  fact: z.enum(KEY_FACTS).nullable().optional().catch(null),
 });
 
 export const contextOutputSchema = z.object({

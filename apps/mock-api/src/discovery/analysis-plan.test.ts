@@ -10,6 +10,7 @@ import { DiscoveryService, type DiscoveryCaller } from './service.js';
 import { extractPage, isBlockedAddress, readSite, type SiteResult } from './site-reader.js';
 import { findSiteUrl } from './site-url.js';
 import { MemoryDiscoveryStore } from './store.js';
+import { setProductSwitchForTests } from '../product-switches.js';
 
 test('карта анализа: всегда пять областей по порядку; «нашли» — только где есть возможности', () => {
   const coverage = normalizeCoverage(
@@ -36,7 +37,12 @@ test('карта анализа: всегда пять областей по п�
   );
 });
 
-test('рецепт: только доступный и только у выполнимой возможности', () => {
+test('рецепт: только доступный и только у выполнимой возможности', (t) => {
+  // Личный помощник живёт в чате: пока чат закрыт, рецепта нет.
+  assert.equal(RECIPES.personal_assistant.available, false);
+  assert.equal(acceptedRecipe('personal_assistant', 'ready'), null);
+  setProductSwitchForTests('chat', true);
+  t.after(() => setProductSwitchForTests('chat', false));
   assert.equal(RECIPES.personal_assistant.available, true);
   assert.equal(acceptedRecipe('personal_assistant', 'ready'), 'personal_assistant');
   assert.equal(acceptedRecipe('personal_assistant', 'needs_setup'), 'personal_assistant');
@@ -232,6 +238,9 @@ const CONTEXT = JSON.stringify({
   domain: 'Магазин одежды',
   summary: 'Отвечает покупателям',
   tasks: [{ id: 't1', title: 'Ответы', source: 'user' }],
+  recurringProcesses: [{ title: 'Вопрос покупателя', steps: ['Пишет', 'Отвечаю вручную'] }],
+  tools: [{ text: 'Таблицы', source: 'user' }],
+  profile: { customerChannels: ['website'], monthlyRequests: 160 },
 });
 const DISCOVERY = JSON.stringify({
   summary: 'Главное — ответы покупателям.',
@@ -316,7 +325,9 @@ const caller: DiscoveryCaller = {
   ipLimited: true,
 };
 
-test('анализ по плану: сайт прочитан один раз и передан модели; карта и рецепты в отчёте', async () => {
+test('анализ по плану: сайт прочитан один раз и передан модели; карта и рецепты в отчёте', async (t) => {
+  setProductSwitchForTests('chat', true);
+  t.after(() => setProductSwitchForTests('chat', false));
   const opened: string[] = [];
   const { service, requests } = setup(async (url) => {
     opened.push(url);
