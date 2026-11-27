@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { config } from '../config.js';
+import { createQueryClient } from './connection.js';
 import {
   apiKeyStore,
   conversationStore,
@@ -83,12 +84,8 @@ export function getDatabaseSqlClient(): postgres.Sql | null {
     return null;
   }
   const connectionString = (config.databaseUrl || process.env.DATABASE_URL || '').trim();
-  activeSqlClient = postgres(connectionString, {
-    max: 10,
-    idle_timeout: 30,
-    connect_timeout: 15,
-    onnotice: () => {},
-  });
+  // Настройки пула — общие (db/connection.ts); время на подключение здесь — 15 с, как было.
+  activeSqlClient = createQueryClient(connectionString, { connect_timeout: 15 });
   return activeSqlClient;
 }
 

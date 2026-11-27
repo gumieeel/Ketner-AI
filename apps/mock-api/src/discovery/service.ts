@@ -511,7 +511,8 @@ export class DiscoveryService {
     this.lastGuestPurge = now;
     try {
       return await this.deps.store.expireGuests(this.guestCutoff(), this.now().toISOString());
-    } catch {
+    } catch (error) {
+      console.error('[discovery] очистка анализов гостей не прошла', error);
       return 0;
     }
   }
@@ -1331,6 +1332,11 @@ export class DiscoveryService {
           },
         }));
       })
+      // Отметка «план упал» сама пишет в базу; если база недоступна, её отказ тоже ловится здесь,
+      // иначе необработанный отказ завершил бы процесс (инцидент 26.11.2026).
+      .catch((error: unknown) => {
+        console.error(`[discovery] план ${planId}: отметка о сбое не записана`, error);
+      })
       .finally(() => {
         if (this.running.get(planId) === job) this.running.delete(planId);
       });
@@ -1516,6 +1522,10 @@ export class DiscoveryService {
           0,
           0,
         );
+      })
+      // Отметка «этап упал» сама пишет в базу; её отказ тоже ловится (инцидент 26.11.2026).
+      .catch((error: unknown) => {
+        console.error(`[discovery] ${id}: отметка о сбое этапа ${stage} не записана`, error);
       })
       .finally(() => {
         if (this.running.get(id) === job) this.running.delete(id);

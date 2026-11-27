@@ -617,7 +617,11 @@ export class BillingService {
     if (payment.recurring) {
       const sub = this.deps.ledger.starsSubscriptions.get(payment.userId);
       if (sub && sub.status === 'active' && this.telegram) {
-        void this.telegram.setStarsSubscriptionCanceled(sub.telegramUserId, sub.chargeId, true);
+        void this.telegram
+          .setStarsSubscriptionCanceled(sub.telegramUserId, sub.chargeId, true)
+          .catch((error: unknown) => {
+            console.error(`[billing] автопродление ${sub.chargeId} не отключено в Telegram`, error);
+          });
         this.deps.ledger.starsSubscriptions.put({
           ...sub,
           status: 'canceled',

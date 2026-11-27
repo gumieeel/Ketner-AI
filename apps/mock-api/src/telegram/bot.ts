@@ -396,7 +396,13 @@ export class TelegramBotService implements TelegramPaymentsPort {
 
   startReminders(): void {
     if (this.reminderTimer) return;
-    this.reminderTimer = setInterval(() => void this.sendRenewalReminders(), REMINDER_INTERVAL_MS);
+    this.reminderTimer = setInterval(
+      () =>
+        void this.sendRenewalReminders().catch((error: unknown) => {
+          console.error('[TelegramBot] напоминания о подписке не разосланы', error);
+        }),
+      REMINDER_INTERVAL_MS,
+    );
     this.reminderTimer.unref?.();
   }
 

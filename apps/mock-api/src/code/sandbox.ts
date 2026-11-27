@@ -188,17 +188,19 @@ export class LocalProcessSandbox implements SandboxRunner {
         // Фоновые процессы команды не должны пережить запуск.
         killGroup(child.pid);
         if (extra) collector.push(extra);
-        void rm(home, { recursive: true, force: true }).finally(() =>
-          resolve({
-            exitCode,
-            signal,
-            timedOut,
-            cancelled,
-            output: collector.toString(),
-            truncated: collector.truncated,
-            durationMs: Date.now() - started,
-          }),
-        );
+        void rm(home, { recursive: true, force: true })
+          .catch((error: unknown) => console.error('[code] временная папка не удалена', error))
+          .finally(() =>
+            resolve({
+              exitCode,
+              signal,
+              timedOut,
+              cancelled,
+              output: collector.toString(),
+              truncated: collector.truncated,
+              durationMs: Date.now() - started,
+            }),
+          );
       };
 
       const timer = setTimeout(() => {
