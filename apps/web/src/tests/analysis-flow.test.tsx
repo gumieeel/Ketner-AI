@@ -1105,4 +1105,52 @@ describe('анализ задачи: начало, вопросы, резуль�
       }),
     );
   });
+  it('пилот анализа v2: строка с моделью поиска; «скоро» без кнопки запуска; не в пилоте строки нет', async () => {
+    const [draftsCard, mailCard] = READY_PATCH.opportunities ?? [];
+    const coverage = [
+      { area: 'clients' as const, status: 'found' as const, opportunities: 2, note: '' },
+      { area: 'sales' as const, status: 'unclear' as const, opportunities: 0, note: '' },
+      { area: 'content' as const, status: 'unclear' as const, opportunities: 0, note: '' },
+      { area: 'documents' as const, status: 'unclear' as const, opportunities: 0, note: '' },
+      { area: 'routine' as const, status: 'unclear' as const, opportunities: 0, note: '' },
+    ];
+    const opportunities = [
+      { ...draftsCard!, area: 'clients' as const, recipe: 'customer_bot' as const },
+      {
+        ...mailCard!,
+        title: 'Заявки сразу в CRM',
+        area: 'clients' as const,
+        recipe: null,
+        requires: ['crm' as const],
+      },
+    ];
+    installDiscoveryApi({
+      view: analysis({
+        ...READY_PATCH,
+        pilot: true,
+        coverage,
+        opportunities,
+        stages: {
+          context: stage('done'),
+          discovery: stage('done', {
+            model: { id: 'claude-sonnet-5.5', name: 'Claude Sonnet 5.5' },
+          }),
+        },
+      }),
+    });
+    const { unmount } = renderRoute('/analyses/a1');
+    expect(
+      await screen.findByText('Пилот: возможности искала модель Claude Sonnet 5.5'),
+    ).toBeVisible();
+    const crm = screen.getByRole('heading', { name: 'Заявки сразу в CRM' }).closest('li')!;
+    expect(within(crm).getByText('Скоро')).toBeVisible();
+    expect(within(crm).queryByRole('button', { name: /создать|запустить|приступить/i })).toBeNull();
+    expect(within(crm).queryByRole('link', { name: /создать|запустить|приступить/i })).toBeNull();
+    unmount();
+
+    installDiscoveryApi({ view: analysis({ ...READY_PATCH, coverage, opportunities }) });
+    renderRoute('/analyses/a1');
+    await screen.findByRole('heading', { name: 'Заявки сразу в CRM' });
+    expect(screen.queryByTestId('pilot-model')).not.toBeInTheDocument();
+  });
 });
