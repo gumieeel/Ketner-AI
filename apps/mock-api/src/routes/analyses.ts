@@ -55,7 +55,8 @@ import { CREDITS_PER_USD } from '../services/entitlement.js';
 import { businessProfileEditSchema, monthlyVolume } from '../discovery/profile.js';
 import { pricingServiceFor } from '../pricing/runtime.js';
 import type { PricingService } from '../pricing/service.js';
-import { publicEstimate, publicRequest } from '../pricing/views.js';
+import { publicRequest } from '../pricing/views.js';
+import { deliveryOf } from '../pricing/delivery.js';
 import { z } from 'zod';
 import { allowanceOver, type BuildAllowance } from '../billing/build-allowance.js';
 import {
@@ -103,7 +104,29 @@ const requestBodySchema = z.object({
 });
 
 /** Публичный вид анализа: без id владельца, хеша адреса и ключа идемпотентности. */
-export function publicAnalysis(analysis: Analysis, opportunities: Opportunity[] = []) {
+/**
+ * Статус возможности для отчёта — один источник правды для счётчика, метки, кнопки и блоков
+ * (docs/ANALYSIS_V2.md, раздел 3.3):
+ * - `now` — есть готовая автоматизация, которую человек запустит сам;
+ * - `team` — работу делает команда Ketner (правила pricing/delivery.ts), без цены;
+ * - `soon` — всё остальное: Ketner пока этого не умеет.
+ */
+export type LaunchStatus = 'now' | 'soon' | 'team';
+
+export function launchOf(
+  item: Pick<Opportunity, 'recipe' | 'feasibilityStatus'>,
+  team: boolean,
+): LaunchStatus {
+  if (item.recipe && RECIPES[item.recipe].available && item.feasibilityStatus !== 'not_supported')
+    return 'now';
+  return team ? 'team' : 'soon';
+}
+
+export function publicAnalysis(
+  analysis: Analysis,
+  opportunities: Opportunity[] = [],
+  options: { teamIds?: ReadonlySet<string> } = {},
+) {
   const stage = (name: 'context' | 'discovery') => {
     const run = analysis.stages[name];
     if (!run) return null;
@@ -148,6 +171,7 @@ export function publicAnalysis(analysis: Analysis, opportunities: Opportunity[] 
         // Рецепт, который сейчас недоступен (личный помощник при закрытом чате), не предлагается и в
         // анализах, сохранённых раньше.
         recipe: item.recipe && RECIPES[item.recipe].available ? item.recipe : null,
+        launch: launchOf(item, options.teamIds?.has(item.id) ?? false),
       })),
     cost: {
       /** Списано с кредитов пользователя (0 у бесплатного анализа). */
@@ -376,36 +400,38 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
   const profileLimiter = new RateLimiter(60_000, 30);
 
   /**
-   * Сметы готового анализа для ответа API. Сбой смет не ломает показ анализа: отчёт виден, а
-   * блок смет — нет (null), ошибка — в журнале сервера.
+   * Какие возможности делает команда Ketner: по сметам сервера (pricing/), вид поставки `team`.
+   * Цены в ответ анализа не попадают (решение владельца от 27.11.2026, docs/ANALYSIS_V2.md, 3.3):
+   * сметы считаются и хранятся на сервере, отчёт показывает только статус. Сбой смет не ломает
+   * показ анализа — тогда статус `team` не ставится, ошибка — в журнале сервера.
    */
-  const estimatesBlock = async (analysis: Analysis, opportunities: Opportunity[]) => {
-    if (analysis.status !== 'ready') return null;
+  const teamIdsOf = async (
+    analysis: Analysis,
+    opportunities: Opportunity[],
+  ): Promise<Set<string>> => {
+    const team = new Set<string>();
+    if (analysis.status !== 'ready') return team;
     const pricing: PricingService | null = pricingServiceFor(stores());
-    if (!pricing) return null;
+    if (!pricing) return team;
     try {
       const rows = await pricing.estimatesFor(analysis, opportunities);
-      if (!rows) return null;
-      const enabled = (await pricing.active()).config.enabled;
-      return {
-        enabled,
-        items: rows.map((row) =>
-          publicEstimate(
-            row,
-            enabled,
-            {
-              catalogPositions: analysis.context?.profile?.catalogPositions ?? null,
-              monthlyRequests: monthlyVolume(analysis.context?.profile),
-            },
-            analysis.language,
-          ),
-        ),
+      const context = {
+        catalogPositions: analysis.context?.profile?.catalogPositions ?? null,
+        monthlyRequests: monthlyVolume(analysis.context?.profile),
       };
+      for (const row of rows ?? []) {
+        if (row.scope !== 'opportunity') continue;
+        if (deliveryOf(row.result, context, analysis.language).kind !== 'team') continue;
+        for (const id of row.opportunityIds) team.add(id);
+      }
     } catch (error) {
-      console.error(`[pricing] ${analysis.id}: смета не посчитана`, error);
-      return null;
+      console.error('[analyses] сметы для статуса «с командой» не посчитаны', error);
     }
+    return team;
   };
+  /** Есть ли у вошедшего человека платный тариф: для статуса «С командой Ketner». */
+  const paidTierOf = (caller: DiscoveryCaller): boolean =>
+    !caller.guest && (deps.accountTiers ?? defaultAccountTiers).tierOf(caller.userId) !== null;
 
   router.get('/offer', async (request: Request, response: Response) => {
     const ready = withService(response);
@@ -529,7 +555,10 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
       return;
     }
     response.json({
-      analysis: publicAnalysis(found.analysis, found.opportunities),
+      analysis: publicAnalysis(found.analysis, found.opportunities, {
+        teamIds: await teamIdsOf(found.analysis, found.opportunities),
+      }),
+      paidTier: paidTierOf(resolved.caller),
       // Цена обновления анализа при изменении ответов — до запуска, как у моделей чата.
       rerun:
         found.analysis.status === 'ready' && found.analysis.questions.length > 0
@@ -550,8 +579,6 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
               })),
             }
           : null,
-      // Предварительные сметы внедрения (pricing/): считает сервер, модель цен не пишет.
-      estimates: await estimatesBlock(found.analysis, found.opportunities),
     });
   });
 
@@ -581,9 +608,12 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
       return;
     }
     const opportunities = await ready.get(resolved.caller.userId, id);
+    const list = opportunities?.opportunities ?? [];
     response.json({
-      analysis: publicAnalysis(result.analysis, opportunities?.opportunities ?? []),
-      estimates: await estimatesBlock(result.analysis, opportunities?.opportunities ?? []),
+      analysis: publicAnalysis(result.analysis, list, {
+        teamIds: await teamIdsOf(result.analysis, list),
+      }),
+      paidTier: paidTierOf(resolved.caller),
     });
   });
 

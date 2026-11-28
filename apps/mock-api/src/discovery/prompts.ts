@@ -162,7 +162,7 @@ Rules:
 - At least ${OPPORTUNITIES_MIN} opportunities. Each solves a specific problem from the context, in the person's own terms. No generic advice like "use AI for productivity".
 - "requires": catalog ids the solution really needs. If it needs something outside the catalog, put "other" and describe it in "otherRequirement". Do not hide such needs: it is fine if part of the opportunities cannot be done in Ketner.
 - Do not promise automation that the catalog does not have (for example, automatic email processing without the "email" capability).
-- Work done for the person themselves or their staff (drafting their letters, replies and documents, summaries for them) needs "personal_assistant". Answers to the business's customers need "customer_bot_page".
+- Work done for the person themselves or their staff (drafting their letters, replies and documents, summaries for them) needs "personal_assistant". Answers to the business's customers need "customer_bot_page". Posts for the business's channels need "auto_posting".
 - If customers write in channels the catalog does not have (WhatsApp, Instagram, Telegram, marketplace chat), keep the honest opportunity with "messengers" — it will be "not supported yet" — and add a separate opportunity with the "customer_bot" recipe and "requires": ["customer_bot_page", "text_generation"]: the bot answers the same questions by link, QR code and site button. In "solution" say plainly that the bot does not connect to WhatsApp or Instagram.
 - "impact.taskId": the id of the context task the benefit applies to, only if that task has numbers; otherwise null. "automationShare": what share of the task AI could realistically take (low / medium / high). Do not write percentages or hours: the server calculates them.
 - "successCriteria": how the person will see that it works.
@@ -197,7 +197,7 @@ ${catalogForPrompt('ru')}
 - Не меньше ${OPPORTUNITIES_MIN} возможностей. Каждая решает конкретную проблему из контекста, словами самого человека. Никаких общих советов вроде «используйте ИИ для продуктивности».
 - "requires": id из каталога, которые действительно нужны решению. Если нужно то, чего нет в каталоге, укажи "other" и опиши это в "otherRequirement". Не скрывай такие потребности: нормально, если часть возможностей в Ketner сделать нельзя.
 - Не обещай автоматизацию, которой нет в каталоге (например, автоматическую обработку почты без возможности "email").
-- Работа для самого человека или его сотрудников (черновики их писем, ответов и документов, сводки для них) требует "personal_assistant". Ответы клиентам бизнеса — "customer_bot_page".
+- Работа для самого человека или его сотрудников (черновики их писем, ответов и документов, сводки для них) требует "personal_assistant". Ответы клиентам бизнеса — "customer_bot_page". Посты для каналов бизнеса — "auto_posting".
 - Если клиенты пишут в каналы, которых нет в каталоге (WhatsApp, Instagram, Telegram, чат маркетплейса), оставь честную возможность с "messengers" — она будет «пока не поддерживается» — и добавь отдельную возможность с рецептом "customer_bot" и "requires": ["customer_bot_page", "text_generation"]: бот отвечает на те же вопросы по ссылке, QR-коду и кнопке на сайте. В "solution" прямо скажи, что к WhatsApp и Instagram бот не подключается.
 - "impact.taskId": id задачи из контекста, к которой относится польза, — только если у задачи есть числа; иначе null. "automationShare": какую долю задачи ИИ реально возьмёт на себя (low / medium / high). Не пиши проценты и часы: их считает сервер.
 - "successCriteria": по чему человек увидит, что это работает.
@@ -221,8 +221,8 @@ export function planSystemPrompt(language: Language, kind: 'brief' | 'full'): st
 
 ${DATA_RULES.en}
 
-Ketner AI capability catalog (id: what it is (status)):
-${catalogForPrompt('en')}
+What Ketner AI can do (id: what it is (status)); anything not listed, Ketner cannot do yet, so such steps are manual:
+${catalogForPrompt('en', { onlyAvailable: true })}
 
 Rules:
 - ${kind === 'brief' ? `A brief plan: 3–${steps} steps, short descriptions.` : `A full plan: 4–${steps} steps with concrete descriptions.`}
@@ -240,8 +240,8 @@ Format:
 
 ${DATA_RULES.ru}
 
-Каталог возможностей Ketner AI (id: что это (статус)):
-${catalogForPrompt('ru')}
+Что умеет Ketner AI (id: что это (статус)); чего нет в списке, Ketner пока не умеет, и такие шаги делаются вручную:
+${catalogForPrompt('ru', { onlyAvailable: true })}
 
 Правила:
 - ${kind === 'brief' ? `Краткий план: 3–${steps} шагов, короткие описания.` : `Полный план: 4–${steps} шагов с конкретными описаниями.`}

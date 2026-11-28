@@ -25,6 +25,7 @@ import {
   type AnalysisView,
   type FeasibilityItem,
   type FeasibilityStatus,
+  type LaunchStatus,
   type OpportunityView,
   type AreaCoverage,
 } from '@/features/discovery/api';
@@ -39,15 +40,7 @@ import {
 } from '@/features/builder/api';
 import { BUILDER_WIZARD_LIVE, wizardSetupPath, wizardStartPath } from '@/features/builder/wizard';
 import { BusinessProfile } from './business-profile';
-import {
-  CombinedEstimate,
-  Disclaimer,
-  EstimateDetails,
-  EstimateSummary,
-  RequestQuoteButton,
-} from './estimate';
 import { ProfileEditor } from './profile-editor';
-import { isTeamWork, type EstimatesBlock, type EstimateView } from '@/features/pricing/api';
 import { ErrorNotice } from './error-notice';
 import { productSwitch } from '@/lib/product-switches';
 import { withoutEndPunctuation } from './report-text';
@@ -59,6 +52,36 @@ import { withoutEndPunctuation } from './report-text';
 function launchable(item: OpportunityView): boolean {
   if (item.recipe === 'personal_assistant') return productSwitch('chat');
   return item.recipe === 'customer_bot' || item.recipe === 'study_assistant';
+}
+
+/**
+ * Статус возможности — один источник правды для счётчика, метки, кнопки и блоков: его считает
+ * сервер (`launch`). У старого сервера поля нет — тогда «сейчас» только у готовой автоматизации.
+ */
+function statusOf(item: OpportunityView): LaunchStatus {
+  if (item.launch) return item.launch === 'now' && !launchable(item) ? 'soon' : item.launch;
+  return launchable(item) ? 'now' : 'soon';
+}
+
+const LAUNCH_TONE: Record<LaunchStatus, BadgeTone> = {
+  now: 'success',
+  team: 'info',
+  soon: 'neutral',
+};
+
+const LAUNCH_LABEL: Record<LaunchStatus, TranslationKey> = {
+  now: 'analysis.launch.now',
+  team: 'analysis.launch.team',
+  soon: 'analysis.launch.soon',
+};
+
+/** Тег вида решения: у ИИ-агента для клиентов — «ИИ-агент для клиентов», а не «Помощник». */
+function solutionTypeLabel(item: OpportunityView): TranslationKey | null {
+  if (!item.solutionType) return null;
+  const forCustomers =
+    item.recipe === 'customer_bot' || item.requires.includes('customer_bot_page');
+  if (item.solutionType === 'assistant' && forCustomers) return 'analysis.type.customerAgent';
+  return `estimate.solutionType.${item.solutionType}` as TranslationKey;
 }
 
 const FEASIBILITY_TONE: Record<FeasibilityStatus, BadgeTone> = {
@@ -82,14 +105,14 @@ const START_STEPS = 3;
 export function Report({
   analysis,
   plans,
-  estimates = null,
+  paidTier = false,
   onChanged,
   children,
 }: {
   analysis: AnalysisView;
   plans: PlansSummary | null;
-  /** Предварительные сметы внедрения: посчитаны сервером. */
-  estimates?: EstimatesBlock | null;
+  /** Есть ли у человека платный тариф — для статуса «С командой Ketner». */
+  paidTier?: boolean;
   onChanged: () => Promise<void>;
   /** Под отчётом в основной колонке: описание задачи, ответы. */
   children?: ReactNode;
@@ -100,7 +123,7 @@ export function Report({
   const sorted = [...analysis.opportunities].sort((a, b) => a.priority - b.priority);
   // Анализ по плану (этап A): главная рекомендация — первая возможность с готовым рецептом.
   const planned = analysis.coverage !== null;
-  const main = planned ? (sorted.find(launchable) ?? null) : null;
+  const main = planned ? (sorted.find((item) => statusOf(item) === 'now') ?? null) : null;
   const opportunities = main ? sorted.filter((item) => item.id !== main.id) : sorted;
   const startWith = sorted
     .filter((item) => item.feasibilityStatus !== 'not_supported' && item.firstStep)
@@ -113,16 +136,18 @@ export function Report({
     item: OpportunityView,
     featured: boolean,
   ): { row: ReactNode; details: ReactNode } => {
+    // Неподдерживаемое — без кнопок; запуск — только у статуса «сейчас» (статус сервера).
     if (item.feasibilityStatus === 'not_supported') return { row: null, details: null };
-    const solution = launchable(item) ? (
-      <SolutionAction
-        analysis={analysis}
-        opportunity={item}
-        builder={builder}
-        primary={featured}
-        start
-      />
-    ) : null;
+    const solution =
+      statusOf(item) === 'now' ? (
+        <SolutionAction
+          analysis={analysis}
+          opportunity={item}
+          builder={builder}
+          primary={featured}
+          start
+        />
+      ) : null;
     const plan = plans ? (
       <PlanAction
         analysis={analysis}
@@ -158,9 +183,6 @@ export function Report({
   const featuredId =
     main?.id ?? listed.find((item) => item.feasibilityStatus !== 'not_supported')?.id ?? null;
   const hidden = listed.length - visible.length;
-  const estimateFor = (id: string): EstimateView | null =>
-    estimates?.items.find((item) => item.scopeKey === `opp:${id}`) ?? null;
-  const combined = estimates?.items.find((item) => item.scope === 'combined') ?? null;
 
   return (
     <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] xl:items-start">
@@ -190,8 +212,7 @@ export function Report({
                     situation={situation}
                     action={actions.row}
                     moreActions={actions.details}
-                    estimate={estimateFor(item.id)}
-                    analysisId={analysis.id}
+                    paidTier={paidTier}
                   />
                 );
               })}
@@ -221,9 +242,6 @@ export function Report({
           ) : null}
         </section>
 
-        {combined ? <CombinedEstimate estimate={combined} analysisId={analysis.id} /> : null}
-        {/* Оговорка о предварительной цене — только у работ команды, не у запуска самому. */}
-        {estimates && estimates.items.some(isTeamWork) && !combined ? <Disclaimer /> : null}
         {analysis.context ? <ProfileEditor analysis={analysis} onChanged={onChanged} /> : null}
 
         <SourceNote analysis={analysis} />
@@ -290,9 +308,7 @@ function SummaryCard({ analysis }: { analysis: AnalysisView }) {
     const [from, to] = item.impact.hoursPerWeek;
     return sum ? [sum[0] + from, sum[1] + to] : [from, to];
   }, null);
-  const readyNow = analysis.opportunities.filter(
-    (item) => item.feasibilityStatus === 'ready',
-  ).length;
+  const readyNow = analysis.opportunities.filter((item) => statusOf(item) === 'now').length;
   const round = (value: number) => Math.round(value * 10) / 10;
 
   return (
@@ -498,19 +514,48 @@ function SaveControl({
   );
 }
 
+/**
+ * «С командой Ketner»: работу настроит команда — это часть платного тарифа, без разовой цены
+ * (решение владельца от 27.11.2026). Без тарифа — требование тарифа и ссылка на тарифы.
+ */
+function TeamBox({ paidTier }: { paidTier: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <div
+      data-testid="team-work"
+      className="mt-3 rounded-xl border border-stroke bg-surface-2/60 px-4 py-3"
+    >
+      <p className="text-[15px] font-medium text-text">{t('analysis.team.title')}</p>
+      <p className="mt-0.5 text-[14px] leading-6 text-muted">{t('analysis.team.body')}</p>
+      <div className="mt-2">
+        {paidTier ? (
+          <Link to="/contacts" className={buttonClasses({ variant: 'outline', size: 'sm' })}>
+            {t('analysis.team.discuss')}
+          </Link>
+        ) : (
+          <p className="text-[14px] leading-6 text-text">
+            {t('analysis.team.paidOnly')}{' '}
+            <Link to="/pricing" className="text-accent underline-offset-4 hover:underline">
+              {t('analysis.team.pricing')}
+            </Link>
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function OpportunityCard({
   item,
   action,
   moreActions,
   situation,
   featured = false,
-  estimate = null,
-  analysisId,
+  paidTier = false,
 }: {
   item: OpportunityView;
-  /** Предварительная смета этой возможности (null — нет). */
-  estimate?: EstimateView | null;
-  analysisId: string;
+  /** Есть ли платный тариф — для блока «С командой Ketner». */
+  paidTier?: boolean;
   /** Главное действие на виду (у рекомендуемой возможности). */
   action: ReactNode;
   /** Остальные действия — в «Подробнее». */
@@ -519,6 +564,7 @@ function OpportunityCard({
   featured?: boolean;
 }) {
   const { t } = useTranslation();
+  const status = statusOf(item);
   const [open, setOpen] = useState(false);
   const detailsId = useId();
   const headingId = useId();
@@ -574,21 +620,17 @@ function OpportunityCard({
                   })}
                 </li>
               ) : null}
-              {item.solutionType ? (
+              {solutionTypeLabel(item) ? (
                 <li>
-                  <Badge tone="neutral">
-                    {t(`estimate.solutionType.${item.solutionType}` as TranslationKey)}
-                  </Badge>
+                  <Badge tone="neutral">{t(solutionTypeLabel(item)!)}</Badge>
                 </li>
               ) : null}
               <li>
-                {/* Честная метка: готовая автоматизация запускается сейчас, остальное — позже. */}
-                <Badge tone={launchable(item) ? 'success' : 'neutral'}>
-                  {launchable(item) ? t('analysis.launch.now') : t('analysis.launch.soon')}
-                </Badge>
+                {/* Статус сервера: «Запускается сейчас», «С командой Ketner» или «Скоро». */}
+                <Badge tone={LAUNCH_TONE[status]}>{t(LAUNCH_LABEL[status])}</Badge>
               </li>
             </ul>
-            {item.feasibilityStatus === 'not_supported' ? (
+            {status === 'soon' && item.feasibilityStatus === 'not_supported' ? (
               <p className="mt-2 text-[14px] leading-6 text-muted">
                 {t('analysis.report.notSupported', {
                   what: item.feasibility.blockers
@@ -597,19 +639,16 @@ function OpportunityCard({
                 })}
               </p>
             ) : null}
-            {estimate ? (
-              <>
-                <EstimateSummary estimate={estimate} />
-                {isTeamWork(estimate) ? (
-                  <>
-                    <div className="mt-3 flex flex-wrap gap-3">
-                      <RequestQuoteButton analysisId={analysisId} estimate={estimate} secondary />
-                    </div>
-                    <EstimateDetails estimate={estimate} />
-                  </>
-                ) : null}
-              </>
+            {status === 'now' ? (
+              <div
+                data-testid="self-service"
+                className="mt-3 rounded-xl border border-stroke bg-surface-2/60 px-4 py-3"
+              >
+                <p className="text-[15px] font-medium text-text">{t('estimate.self.title')}</p>
+                <p className="mt-0.5 text-[14px] leading-6 text-muted">{t('estimate.self.body')}</p>
+              </div>
             ) : null}
+            {status === 'team' ? <TeamBox paidTier={paidTier} /> : null}
           </div>
         </div>
 

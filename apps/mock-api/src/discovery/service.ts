@@ -87,6 +87,9 @@ import {
 import type { DiscoveryStore } from './store.js';
 import { contextTemplate, discoveryTemplate, planTemplate } from './templates.js';
 import { gateQuestions, needsKeyAnswer } from './key-facts.js';
+import { customerChannelsIn, withoutCustomerChannels } from './channel-guard.js';
+import { productSwitch } from '../product-switches.js';
+import type { CapabilityId } from './capabilities.js';
 import { analysisV2PilotFor } from './pilot.js';
 import type {
   Analysis,
@@ -1748,6 +1751,46 @@ export class DiscoveryService {
     return result.ok ? result : null;
   }
 
+  /**
+   * Проверки сервера над возможностью от модели (анализ 28.11.2026):
+   * - личный помощник живёт в чате: пока чат закрыт, он не называется недостающим — у постов это
+   *   «Публикация постов по расписанию» (`auto_posting`, «скоро»), у остального — тексты ИИ; рецепт
+   *   помощника при закрытом чате недоступен (analysis-map.ts), карточка — «скоро»;
+   * - канал клиента, которого у Ketner нет (channel-guard.ts): у карточки с готовой автоматизацией
+   *   он убирается из текста, у остальных в требования добавляется `messengers` — «скоро».
+   */
+  private guardOpportunity(
+    item: DiscoveryOutput['opportunities'][number],
+    user: UserCapabilities,
+    language: Language,
+  ): DiscoveryOutput['opportunities'][number] {
+    let next = item;
+    if (!productSwitch('chat') && next.requires.includes('personal_assistant')) {
+      const posts = /пост|публикац|контент|рассылк|post|publish|content|newsletter/i.test(
+        `${next.title} ${next.solution}`,
+      );
+      const rest = next.requires.filter((id) => id !== 'personal_assistant');
+      const added: CapabilityId = posts ? 'auto_posting' : 'text_generation';
+      next = { ...next, requires: rest.includes(added) ? rest : [...rest, added] };
+    }
+    const channels = customerChannelsIn(next.title, next.problem, next.solution);
+    if (channels.length === 0 || next.requires.includes('messengers')) return next;
+    const now = acceptedRecipe(
+      next.recipe,
+      assessFeasibility(next.requires, user, language, next.otherRequirement).status,
+      next.requires,
+    );
+    if (now) {
+      return {
+        ...next,
+        title: withoutCustomerChannels(next.title),
+        problem: withoutCustomerChannels(next.problem),
+        solution: withoutCustomerChannels(next.solution),
+      };
+    }
+    return { ...next, requires: [...next.requires, 'messengers'] };
+  }
+
   private buildOpportunities(
     analysis: Analysis,
     context: ContextOutput,
@@ -1774,14 +1817,10 @@ export class DiscoveryService {
       channels.length > 0 && !offersBot(output.opportunities)
         ? customerBotOffer(analysis.language, channels)
         : null;
-    // Возможность с рецептом личного помощника требует его возможность: пока чат закрыт, она
-    // «пока нет», а не «можно сделать сейчас» (capabilities.ts, personal_assistant).
-    const drafts = (serverBot ? [...output.opportunities, serverBot] : output.opportunities).map(
-      (item) =>
-        item.recipe === 'personal_assistant' && !item.requires.includes('personal_assistant')
-          ? { ...item, requires: [...item.requires, 'personal_assistant' as const] }
-          : item,
-    );
+    const drafts = [
+      ...output.opportunities.map((item) => this.guardOpportunity(item, user, analysis.language)),
+      ...(serverBot ? [serverBot] : []),
+    ];
     const built = drafts.map((item, position): Opportunity => {
       const feasibility = assessFeasibility(
         item.requires,

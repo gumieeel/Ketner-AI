@@ -1840,6 +1840,14 @@ export const ru = {
   'analysis.ready.benefit': 'Польза',
   'analysis.ready.hours': '≈ {from}–{to} ч в неделю',
   'analysis.ready.firstStep': 'Первый шаг',
+  'analysis.launch.team': 'С командой Ketner',
+  'analysis.type.customerAgent': 'ИИ-агент для клиентов',
+  'analysis.team.title': 'С командой Ketner',
+  'analysis.team.body':
+    'Это настроит команда Ketner вместе с вами. Помощь команды входит в платный тариф.',
+  'analysis.team.discuss': 'Обсудить с командой',
+  'analysis.team.paidOnly': 'Доступно на платном тарифе.',
+  'analysis.team.pricing': 'Тарифы',
   'analysis.launch.now': 'Запускается сейчас',
   'analysis.launch.soon': 'Скоро',
   'analysis.feasibility.ready': 'Можно сделать сейчас',
@@ -2737,7 +2745,7 @@ export const ru = {
   'profile.edited': 'уточнено вами',
   'profile.edit': 'Уточнить',
   'profile.hint':
-    'Уточните профиль — смета пересчитается без нового анализа. Неуказанное не считается фактом.',
+    'Уточните профиль — отчёт учтёт это без нового анализа. Неуказанное не считается фактом.',
   'profile.businessName': 'Название',
   'profile.industry': 'Отрасль',
   'profile.city': 'Город',

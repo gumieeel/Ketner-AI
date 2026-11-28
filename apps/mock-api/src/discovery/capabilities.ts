@@ -51,6 +51,7 @@ export const CAPABILITY_IDS = [
   'text_generation',
   'customer_bot_page',
   'personal_assistant',
+  'auto_posting',
   'document_text',
   'document_tools',
   'image_generation',
@@ -113,6 +114,17 @@ export const CAPABILITIES: Readonly<Record<CapabilityId, Capability>> = {
             ru: 'Появится позже: сейчас Ketner запускает ИИ-агентов для клиентов.',
             en: 'Coming later: for now Ketner launches AI agents for customers.',
           };
+    },
+  },
+  // Посты по расписанию в Telegram-канал владельца (агент для контента, roadmap.md, пункт 38):
+  // пока нет — «скоро», в листе ожидания (docs/ANALYSIS_V2.md, 4.2).
+  auto_posting: {
+    id: 'auto_posting',
+    availability: 'unavailable',
+    label: { ru: 'Посты по расписанию', en: 'Scheduled posts' },
+    hint: {
+      ru: 'Появится позже: агент для контента, который готовит и публикует посты.',
+      en: 'Coming later: a content agent that writes and publishes posts.',
     },
   },
   // Бот для клиентов (рецепт customer_bot): своя страница, ссылка, QR-код, кнопка на сайте.
@@ -352,7 +364,14 @@ export function releasedCapabilityIds(): CapabilityId[] {
 }
 
 /** Каталог для промпта: выпущенные возможности — id, что это, доступно ли. */
-export function catalogForPrompt(language: Language): string {
+/**
+ * Каталог для промпта. `onlyAvailable` — без того, чего у Ketner нет (для плана: шаги на
+ * недоступном всё равно называются ручными, а список «нет» только удлиняет промпт).
+ */
+export function catalogForPrompt(
+  language: Language,
+  options: { onlyAvailable?: boolean } = {},
+): string {
   const status: Record<CapabilityAvailability, Record<Language, string>> = {
     available: { ru: 'есть', en: 'available' },
     setup: { ru: 'есть после настройки', en: 'available after setup' },
@@ -364,6 +383,7 @@ export function catalogForPrompt(language: Language): string {
     unavailable: { ru: 'нет', en: 'not available' },
   };
   return releasedCapabilityIds()
+    .filter((id) => !options.onlyAvailable || CAPABILITIES[id].availability !== 'unavailable')
     .map((id) => {
       const capability = CAPABILITIES[id];
       return `- ${id}: ${capability.label[language]} (${status[capability.availability][language]})`;
