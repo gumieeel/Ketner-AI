@@ -24,6 +24,7 @@ import {
 } from './prompts.js';
 
 import { CATALOG_PROMPT_MAX_CHARS } from '../pricing/catalog.js';
+import { PLAYBOOK_PROMPT_MAX_CHARS } from './playbooks/index.js';
 
 export type AnalysisMode = 'free' | 'paid' | 'deep';
 export type StageName = 'context' | 'discovery' | 'plan';
@@ -107,7 +108,7 @@ function systemChars(stage: StageName, language: Language, pilot: boolean): numb
 
 function payloadChars(stage: StageName): number {
   if (stage === 'context') return PAYLOAD_LIMITS.context + PAYLOAD_LIMITS.site;
-  if (stage === 'discovery') return PAYLOAD_LIMITS.discovery;
+  if (stage === 'discovery') return PAYLOAD_LIMITS.discovery + PLAYBOOK_PROMPT_MAX_CHARS;
   return PAYLOAD_LIMITS.plan;
 }
 

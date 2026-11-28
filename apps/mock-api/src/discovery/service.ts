@@ -88,6 +88,7 @@ import {
 import type { DiscoveryStore } from './store.js';
 import { contextTemplate, discoveryTemplate, planTemplate } from './templates.js';
 import { gateQuestions, needsKeyAnswer } from './key-facts.js';
+import { playbookFor, playbookForPrompt } from './playbooks/index.js';
 import { customerChannelsIn, withoutCustomerChannels } from './channel-guard.js';
 import { productSwitch } from '../product-switches.js';
 import type { CapabilityId } from './capabilities.js';
@@ -1682,7 +1683,15 @@ export class DiscoveryService {
             : undefined,
           pilot.pilot ? 'pilot' : 'current',
         ),
-        userMessage: discoveryUserMessage(started.language, context, answers),
+        userMessage: discoveryUserMessage(
+          started.language,
+          context,
+          answers,
+          playbookForPrompt(
+            playbookFor(context.profile?.industry, context.profile?.businessModel),
+            started.language,
+          ),
+        ),
         schema: discoveryOutputSchema,
         templateOutput: discoveryTemplate(started.language),
       });

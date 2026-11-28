@@ -23,6 +23,7 @@ export const INDUSTRIES = [
   'food',
   'medical',
   'logistics',
+  'real_estate',
   'other',
 ] as const;
 export type Industry = (typeof INDUSTRIES)[number];

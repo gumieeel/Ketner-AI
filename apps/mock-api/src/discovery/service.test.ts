@@ -1197,6 +1197,32 @@ test('база недоступна: этап упал и отметка о сб
   );
 });
 
+test('поиск возможностей получает отраслевой плейбук по отрасли из разбора описания', async () => {
+  const run = async (profile: Record<string, unknown>) => {
+    const context = {
+      ...JSON.parse(CONTEXT_NO_QUESTIONS),
+      profile: { customerChannels: ['website'], monthlyRequests: 160, ...profile },
+    };
+    const harness = setup({ script: { context: JSON.stringify(context) } });
+    const created = await create(harness.service, guest(), { text: LONG });
+    assert.equal(created.ok, true);
+    await harness.service.whenIdle();
+    const request = harness.requests.find((r) => r.task?.id.split(':')[1] === 'discovery');
+    return request?.messages.find((m) => m.role === 'user')?.content ?? '';
+  };
+  const clinic = await run({ industry: 'medical' });
+  assert.match(
+    clinic,
+    /^<reference>\nСправка: типовые ценные автоматизации для отрасли «Клиники и медицинские центры»/,
+  );
+  assert.match(clinic, /<\/reference>\nКонтекст и ответы \(JSON\):\n<user_data>/);
+  assert.match(
+    await run({ industry: 'services', businessModel: 'b2b' }),
+    /«B2B-услуги и агентства»/,
+  );
+  assert.match(await run({}), /«Малый бизнес»/);
+});
+
 test('пилот анализа v2: поиск возможностей на Sonnet без подмены и с резервом его потолка; остальные — как раньше', async (t) => {
   t.after(() => setAnalysisV2PilotForTests(null));
   setAnalysisV2PilotForTests(['pilot-owner']);

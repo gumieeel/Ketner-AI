@@ -2774,6 +2774,7 @@ export const ru = {
   'profile.industry.food': 'Общепит',
   'profile.industry.medical': 'Медицина',
   'profile.industry.logistics': 'Логистика',
+  'profile.industry.real_estate': 'Недвижимость',
   'profile.industry.other': 'Другое',
   'profile.channel.whatsapp': 'WhatsApp',
   'profile.channel.instagram': 'Instagram',

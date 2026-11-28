@@ -310,6 +310,8 @@ export function discoveryUserMessage(
   language: Language,
   context: ContextOutput,
   answers: readonly AnswerForPrompt[],
+  /** Отраслевой плейбук (playbooks/): справка, не данные пользователя. */
+  playbook: string | null = null,
 ): string {
   const answered = answers
     .filter((item) => item.value)
@@ -319,7 +321,8 @@ export function discoveryUserMessage(
     answers: answered,
   });
   const label = language === 'en' ? 'Context and answers (JSON)' : 'Контекст и ответы (JSON)';
-  return `${label}:\n<user_data>\n${clip(neutralize(payload), PAYLOAD_LIMITS.discovery)}\n</user_data>`;
+  const data = `${label}:\n<user_data>\n${clip(neutralize(payload), PAYLOAD_LIMITS.discovery)}\n</user_data>`;
+  return playbook ? `<reference>\n${playbook}\n</reference>\n${data}` : data;
 }
 
 export function planUserMessage(
