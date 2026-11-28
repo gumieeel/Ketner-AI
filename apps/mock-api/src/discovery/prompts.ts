@@ -23,6 +23,8 @@ import {
 /** Сколько символов полезной нагрузки уходит в каждый этап: часть потолка цены вызова. */
 export const PAYLOAD_LIMITS = {
   context: 9_000,
+  /** Сайт в разборе описания: текст до 10 страниц и факты сервера (site-crawl.ts). */
+  site: 18_000,
   discovery: 14_000,
   plan: 10_000,
 } as const;
@@ -267,14 +269,31 @@ function clip(value: string, max: number): string {
 
 export function contextUserMessage(
   inputText: string,
-  site: { url: string; title: string; description: string; text: string } | null = null,
+  site: {
+    url: string;
+    title: string;
+    description: string;
+    text: string;
+    facts?: ReadonlyArray<{ kind: string; value: string; page: string }>;
+  } | null = null,
 ): string {
   const text = clip(neutralize(inputText), PAYLOAD_LIMITS.context);
   if (!site) return `<user_data>\n${text}\n</user_data>`;
-  // Сайт — в пределах того же потолка: текст человека важнее, сайту — остаток (не меньше 1 500).
-  const room = Math.max(1_500, PAYLOAD_LIMITS.context - text.length);
-  const page = [site.url, site.title, site.description, site.text].filter(Boolean).join('\n');
-  return `<user_data>\n${text}\n</user_data>\n<site_data>\n${clip(neutralizeSite(page), room)}\n</site_data>`;
+  // Факты сервер собрал сам (каналы, формы, виджеты, цены, часы): модели — коротким списком.
+  const facts = (site.facts ?? [])
+    .slice(0, 40)
+    .map((fact) => `- ${fact.kind}: ${fact.value} (${fact.page})`)
+    .join('\n');
+  const page = [
+    site.url,
+    site.title,
+    site.description,
+    facts ? `Факты со страниц:\n${facts}` : '',
+    site.text,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  return `<user_data>\n${text}\n</user_data>\n<site_data>\n${clip(neutralizeSite(page), PAYLOAD_LIMITS.site)}\n</site_data>`;
 }
 
 /** Текст сайта тоже не может «закрыть» свой блок или открыть блок пользователя. */

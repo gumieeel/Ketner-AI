@@ -188,6 +188,7 @@ export function Report({
     <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] xl:items-start">
       <div className="flex min-w-0 flex-col gap-8">
         <SummaryCard analysis={analysis} />
+        <SiteReview analysis={analysis} />
 
         <section aria-labelledby="result-title">
           <h2
@@ -994,10 +995,57 @@ function SourceNote({ analysis }: { analysis: AnalysisView }) {
   const source = analysis.source;
   if (!source) return null;
   const site = siteName(source.url);
+  const pages = source.ok ? (source.pages?.length ?? 0) : 0;
   return (
     <p className="mt-1 text-[13px] text-subtle">
-      {source.ok ? t('analysis.source.read', { site }) : t('analysis.source.failed', { site })}
+      {!source.ok
+        ? t('analysis.source.failed', { site })
+        : pages > 1
+          ? t('analysis.source.readPages', { site, count: String(pages) })
+          : t('analysis.source.read', { site })}
     </p>
+  );
+}
+
+/** «Что мы увидели на вашем сайте»: что сейчас теряет заявки, у каждой строки — страница. */
+function SiteReview({ analysis }: { analysis: AnalysisView }) {
+  const { t } = useTranslation();
+  const source = analysis.source;
+  if (!source?.ok || !source.review || source.review.length === 0) return null;
+  const pageUrl = (path: string) => {
+    try {
+      return new URL(path, source.url).toString();
+    } catch {
+      return source.url;
+    }
+  };
+  return (
+    <section
+      aria-labelledby="site-review-title"
+      className="rounded-2xl border border-stroke bg-surface px-5 py-5"
+    >
+      <h2 id="site-review-title" className="text-[18px] font-medium text-text">
+        {t('analysis.siteReview.title')}
+      </h2>
+      <p className="mt-1 text-[14px] leading-6 text-muted">
+        {t('analysis.siteReview.lead', { site: siteName(source.url) })}
+      </p>
+      <ul className="mt-3 flex flex-col gap-2">
+        {source.review.map((finding) => (
+          <li key={finding.rule} className="text-[15px] leading-6 text-text">
+            {finding.text}{' '}
+            <a
+              href={pageUrl(finding.page)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[13px] text-subtle underline underline-offset-4 hover:text-text"
+            >
+              {finding.page === '/' ? t('analysis.siteReview.home') : finding.page}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

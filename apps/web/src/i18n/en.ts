@@ -1739,6 +1739,10 @@ export const en: Record<TranslationKey, string> = {
   'analysis.map.found': 'Found: {count}',
   'analysis.map.not_relevant': 'Not relevant',
   'analysis.map.unclear': 'Not enough information',
+  'analysis.source.readPages': 'Pages of {site} read: {count}.',
+  'analysis.siteReview.title': 'What we saw on your website',
+  'analysis.siteReview.lead': 'Where {site} loses requests now:',
+  'analysis.siteReview.home': 'home page',
   'analysis.source.read': 'Read the website {site}.',
   'analysis.source.failed':
     'Could not open the website {site} — the analysis is based on your description.',

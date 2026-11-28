@@ -72,8 +72,24 @@ export interface AreaCoverage {
   note: string;
 }
 
+export interface SiteFindingView {
+  rule: string;
+  text: string;
+  /** Путь страницы, к которой относится находка. */
+  page: string;
+}
+
 export type SiteSourceView =
-  { url: string; ok: true; title: string } | { url: string; ok: false; reason: string };
+  | {
+      url: string;
+      ok: true;
+      title: string;
+      /** Прочитанные страницы, главная первой (у старых анализов поля нет). */
+      pages?: string[];
+      /** «Разбор сайта»: что теряет заявки (правила сервера по фактам). */
+      review?: SiteFindingView[];
+    }
+  | { url: string; ok: false; reason: string };
 
 /**
  * Статус возможности от сервера — один источник правды для счётчика, метки, кнопки и блоков:

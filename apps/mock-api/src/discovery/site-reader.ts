@@ -108,7 +108,16 @@ interface RawResponse {
   tooLarge: boolean;
 }
 
-function request(url: URL, options: Required<SiteReaderOptions>): Promise<RawResponse> {
+/** Заголовок User-Agent: страница /bot объясняет владельцу сайта, кто его читает. */
+export const SITE_USER_AGENT = 'KetnerBot/1.0 (+https://ketner.org/bot)';
+
+const ACCEPT_HTML = 'text/html,application/xhtml+xml,text/plain;q=0.8';
+
+function request(
+  url: URL,
+  options: Required<SiteReaderOptions>,
+  accept: string = ACCEPT_HTML,
+): Promise<RawResponse> {
   return new Promise((resolve, reject) => {
     const client = url.protocol === 'https:' ? https : http;
     const req = client.request(
@@ -118,8 +127,8 @@ function request(url: URL, options: Required<SiteReaderOptions>): Promise<RawRes
         lookup: safeLookup(options.allowPrivate) as never,
         timeout: options.timeoutMs,
         headers: {
-          'User-Agent': 'KetnerBot/1.0 (+https://ketner.org)',
-          Accept: 'text/html,application/xhtml+xml,text/plain;q=0.8',
+          'User-Agent': SITE_USER_AGENT,
+          Accept: accept,
           'Accept-Encoding': 'identity',
           'Accept-Language': 'ru,en;q=0.8',
         },
@@ -224,7 +233,7 @@ export function extractPage(html: string, maxChars: number) {
   };
 }
 
-function decode(body: Buffer, contentType: string): string {
+export function decode(body: Buffer, contentType: string): string {
   const head = body.subarray(0, 2048).toString('latin1');
   const charset = (
     /charset=["']?([\w-]+)/i.exec(contentType)?.[1] ??
@@ -238,10 +247,20 @@ function decode(body: Buffer, contentType: string): string {
   }
 }
 
-export async function readSite(
+export type FetchResult =
+  | { ok: true; url: string; contentType: string; body: Buffer }
+  | { ok: false; url: string; reason: SiteFailure };
+
+/**
+ * Один адрес со всеми проверками: схема и порт, запрещённые адреса (в том числе на каждом
+ * соединении), переадресации — каждая проверяется заново, лимит размера и времени.
+ * `sameSite` — переадресация на другой сайт считается неудачей (для внутренних страниц).
+ */
+export async function fetchResource(
   address: string,
   overrides: SiteReaderOptions = {},
-): Promise<SiteResult> {
+  extra: { accept?: string; sameSite?: (url: URL) => boolean } = {},
+): Promise<FetchResult> {
   const options = { ...DEFAULTS, allowPrivate: false, ...overrides };
   let url: URL;
   try {
@@ -252,6 +271,8 @@ export async function readSite(
   for (let hop = 0; hop <= options.maxRedirects; hop += 1) {
     if (!allowedUrl(url, options.allowPrivate))
       return { ok: false, url: url.toString(), reason: 'blocked' };
+    if (extra.sameSite && !extra.sameSite(url))
+      return { ok: false, url: url.toString(), reason: 'blocked' };
     if (
       !options.allowPrivate &&
       net.isIP(url.hostname.replace(/^\[|\]$/g, '')) &&
@@ -261,7 +282,7 @@ export async function readSite(
     }
     let response: RawResponse;
     try {
-      response = await request(url, options);
+      response = await request(url, options, extra.accept);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       return {
@@ -283,14 +304,31 @@ export async function readSite(
     if (response.status < 200 || response.status >= 300 || !response.body) {
       return { ok: false, url: url.toString(), reason: 'http_error' };
     }
-    if (!/text\/html|application\/xhtml|text\/plain/i.test(response.contentType)) {
-      return { ok: false, url: url.toString(), reason: 'not_html' };
-    }
-    const page = extractPage(decode(response.body, response.contentType), options.maxChars);
-    if (!page.title && !page.description && page.text.length < 40) {
-      return { ok: false, url: url.toString(), reason: 'empty' };
-    }
-    return { ok: true, url: url.toString(), ...page };
+    return {
+      ok: true,
+      url: url.toString(),
+      contentType: response.contentType,
+      body: response.body,
+    };
   }
   return { ok: false, url: url.toString(), reason: 'http_error' };
+}
+
+export function isHtml(contentType: string): boolean {
+  return /text\/html|application\/xhtml|text\/plain/i.test(contentType);
+}
+
+export async function readSite(
+  address: string,
+  overrides: SiteReaderOptions = {},
+): Promise<SiteResult> {
+  const options = { ...DEFAULTS, allowPrivate: false, ...overrides };
+  const fetched = await fetchResource(address, options);
+  if (!fetched.ok) return fetched;
+  if (!isHtml(fetched.contentType)) return { ok: false, url: fetched.url, reason: 'not_html' };
+  const page = extractPage(decode(fetched.body, fetched.contentType), options.maxChars);
+  if (!page.title && !page.description && page.text.length < 40) {
+    return { ok: false, url: fetched.url, reason: 'empty' };
+  }
+  return { ok: true, url: fetched.url, ...page };
 }
