@@ -1814,6 +1814,7 @@ export const ru = {
   'analysis.result.duration': 'Время анализа',
   'analysis.result.minSec': '{min} мин {sec} сек',
   'analysis.result.sec': '{sec} сек',
+  'analysis.result.pilotModel': 'Пилот: возможности искала модель {model}',
   'analysis.result.summaryTitle': 'Краткое резюме',
   'analysis.result.savingTitle': 'Потенциальная экономия времени',
   'analysis.result.savingNote': 'по числам из вашего описания',

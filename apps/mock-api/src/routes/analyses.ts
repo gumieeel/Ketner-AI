@@ -63,6 +63,7 @@ import {
   type AccountTiers,
 } from '../billing/account-tiers.js';
 import { RECIPES } from '../discovery/analysis-map.js';
+import { analysisV2PilotFor } from '../discovery/pilot.js';
 
 export interface AnalysesRouterDeps {
   ai: AiConfig;
@@ -119,6 +120,8 @@ export function publicAnalysis(analysis: Analysis, opportunities: Opportunity[] 
     id: analysis.id,
     status: analysis.status,
     mode: analysis.mode,
+    /** Аккаунт в пилоте анализа v2: отчёт показывает, какая модель искала возможности. */
+    pilot: analysisV2PilotFor(analysis.ownerId),
     language: analysis.language,
     guest: analysis.guest,
     inputText: analysis.inputText,
