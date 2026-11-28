@@ -154,7 +154,12 @@ const REQUEST: RequestView = {
   updatedAt: '2026-11-07T10:05:00.000Z',
 };
 
-function installApi(estimate: EstimateView = ESTIMATE) {
+function installApi(
+  estimate: EstimateView = ESTIMATE,
+  patch: Partial<AnalysisView> = {},
+  paidTier = false,
+) {
+  const analysis = { ...ANALYSIS, ...patch };
   const calls: Array<{
     method: string;
     path: string;
@@ -175,10 +180,12 @@ function installApi(estimate: EstimateView = ESTIMATE) {
     });
     if (url.pathname === '/api/analyses/a1' && method === 'GET') {
       return json(200, {
-        analysis: ANALYSIS,
+        analysis,
         plans: null,
         rerun: null,
         retry: null,
+        paidTier,
+        // Старый сервер ещё присылал сметы: отчёт их не показывает.
         estimates: { enabled: true, items: [estimate] },
       });
     }
@@ -186,7 +193,7 @@ function installApi(estimate: EstimateView = ESTIMATE) {
       return json(201, { request: REQUEST });
     }
     if (url.pathname === '/api/analyses/a1/profile' && method === 'PATCH') {
-      return json(200, { analysis: ANALYSIS, estimates: { enabled: true, items: [estimate] } });
+      return json(200, { analysis, paidTier });
     }
     if (url.pathname === '/api/requests' && method === 'GET')
       return json(200, { requests: [REQUEST] });
@@ -215,7 +222,7 @@ function signIn() {
   });
 }
 
-describe('смета внедрения в отчёте и заявка', () => {
+describe('отчёт без разовых смет; статус «С командой Ketner»; «Мои заявки»', () => {
   beforeEach(() => {
     resetPreferences();
     resetAuth();
@@ -226,92 +233,93 @@ describe('смета внедрения в отчёте и заявка', () => 
     vi.unstubAllGlobals();
   });
 
-  it('показывает рассчитанный сервером диапазон, срок, уверенность и что оплачивается отдельно', async () => {
+  it('разовых смет в отчёте нет ни у кого: ни цены, ни «смет», ни «Если внедрять вместе», ни заявки', async () => {
+    signIn();
+    // Даже если старый сервер прислал сметы — отчёт их не показывает.
     installApi();
     renderRoute('/analyses/a1');
-    const card = (
-      await screen.findByRole('heading', { name: 'ИИ-консультант по товарам' })
-    ).closest('li')!;
-    expect(within(card).getByText('Предварительная стоимость внедрения')).toBeInTheDocument();
-    expect(within(card).getByText(/85\s000–145\s000\s₸/)).toBeInTheDocument();
-    expect(within(card).getByText('Ориентировочный срок: 4–9 рабочих дней')).toBeInTheDocument();
-    expect(within(card).getByText('Оценка приблизительная')).toBeInTheDocument();
-    expect(within(card).getAllByText('Требуется техническая проверка').length).toBeGreaterThan(0);
-    expect(within(card).getByText('Помощник')).toBeInTheDocument();
-
-    fireEvent.click(within(card).getByRole('button', { name: 'Из чего складывается стоимость' }));
-    expect(within(card).getByText('В стоимость входит')).toBeVisible();
-    expect(within(card).getByText(/Обмен заказами с CRM через её API/)).toBeVisible();
-    expect(within(card).getByText('Отдельно оплачивается')).toBeVisible();
-    // Работа команды — только на платном тарифе; тариф — с сервера, прежней подписки $15 нет.
-    expect(
-      within(card).getByText('Работа по интеграциям доступна только на платном тарифе.'),
-    ).toBeVisible();
-    expect(
-      within(card).getByText(/Тариф Growth: \$29 в месяц, до 5\s000 обращений\./),
-    ).toBeVisible();
-    expect(card.textContent).not.toMatch(/\$15|7\s500 кредитов/);
-    expect(within(card).getByText(/зависит от числа обращений/)).toBeVisible();
-    expect(
-      within(card).getByText(
-        /Это предварительная оценка, а не окончательное коммерческое предложение/,
-      ),
-    ).toBeVisible();
-    expect(within(card).getByText(/её срок от нас не зависит/)).toBeVisible();
-    // Профиль бизнеса виден и правится.
-    expect(screen.getByText('Профиль бизнеса')).toBeInTheDocument();
-    expect(screen.getByText('Караганда')).toBeInTheDocument();
-  });
-
-  it('гостю предлагает войти, а не делает вид, что заявка отправлена', async () => {
-    const calls = installApi();
-    renderRoute('/analyses/a1');
-    const card = (
-      await screen.findByRole('heading', { name: 'ИИ-консультант по товарам' })
-    ).closest('li')!;
-    fireEvent.click(within(card).getByRole('button', { name: 'Запросить точную смету' }));
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByRole('link', { name: 'Войти' })).toHaveAttribute(
-      'href',
-      '/login?redirect=%2Fanalyses%2Fa1',
+    await screen.findByRole('heading', { name: 'ИИ-консультант по товарам' });
+    const text = document.body.textContent ?? '';
+    expect(text).not.toMatch(/\d[\d\s\u00a0]*₸/);
+    expect(text).not.toMatch(/\$\s?\d/);
+    const at = text.search(/смет/i);
+    expect(at === -1 ? '' : text.slice(Math.max(0, at - 60), at + 60)).toBe('');
+    expect(text).not.toMatch(
+      /Если внедрять вместе|Дешевле, чем по отдельности|Из чего складывается/,
     );
-    expect(calls.some((call) => call.path.endsWith('/requests'))).toBe(false);
+    expect(text).not.toMatch(/Предварительная стоимость|Запросить/);
   });
 
-  it('после входа отправляет заявку со сметой и ключом идемпотентности, показывает статус сервера', async () => {
+  it('«С командой Ketner»: без цены; с тарифом — «Обсудить с командой», без тарифа — требование тарифа', async () => {
     signIn();
-    const calls = installApi();
+    const team = { ...ANALYSIS.opportunities[0]!, launch: 'team' as const };
+    installApi(ESTIMATE, { opportunities: [team] }, true);
     renderRoute('/analyses/a1');
     const card = (
       await screen.findByRole('heading', { name: 'ИИ-консультант по товарам' })
     ).closest('li')!;
-    fireEvent.click(within(card).getByRole('button', { name: 'Запросить точную смету' }));
-    const dialog = await screen.findByRole('dialog');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Отправить заявку' }));
-    expect(await within(dialog).findByText('Укажите номер телефона')).toBeInTheDocument();
-    expect(calls.some((call) => call.method === 'POST' && call.path.endsWith('/requests'))).toBe(
-      false,
-    );
-
-    fireEvent.change(within(dialog).getByLabelText('Телефон или WhatsApp'), {
-      target: { value: '+7 700 123 45 67' },
-    });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Отправить заявку' }));
-    expect(await within(dialog).findByText('Заявка отправлена')).toBeInTheDocument();
-    expect(within(dialog).getByText(/Техническая проверка/)).toBeInTheDocument();
-    const post = calls.find(
-      (call) => call.method === 'POST' && call.path === '/api/analyses/a1/requests',
-    )!;
-    expect(post.body).toEqual({
-      scopeKey: 'opp:o1',
-      message: '',
-      contact: { name: 'Айгерим', phone: '+7 700 123 45 67' },
-    });
-    expect(post.headers['Idempotency-Key']).toMatch(/^[A-Za-z0-9_-]{8,}$/);
-    expect(within(dialog).getByRole('link', { name: 'Открыть заявку' })).toHaveAttribute(
+    expect(within(card).getAllByText('С командой Ketner')[0]).toBeVisible();
+    expect(within(card).getByRole('link', { name: 'Обсудить с командой' })).toHaveAttribute(
       'href',
-      '/requests/r1',
+      '/contacts',
     );
+    expect(within(card).queryByText(/₸/)).toBeNull();
+    expect(within(card).queryByTestId('self-service')).toBeNull();
+  });
+
+  it('«С командой Ketner» без платного тарифа: требование тарифа и ссылка на тарифы', async () => {
+    signIn();
+    const team = { ...ANALYSIS.opportunities[0]!, launch: 'team' as const };
+    installApi(ESTIMATE, { opportunities: [team] }, false);
+    renderRoute('/analyses/a1');
+    const again = (
+      await screen.findByRole('heading', { name: 'ИИ-консультант по товарам' })
+    ).closest('li')!;
+    expect(within(again).getByText(/Доступно на платном тарифе\./)).toBeVisible();
+    expect(within(again).getByRole('link', { name: 'Тарифы' })).toHaveAttribute('href', '/pricing');
+    expect(within(again).queryByRole('link', { name: 'Обсудить с командой' })).toBeNull();
+  });
+
+  it('один статус для счётчика, метки и блоков: «сейчас» — блок «сами», «скоро» — без него', async () => {
+    signIn();
+    const base = ANALYSIS.opportunities[0]!;
+    installApi(ESTIMATE, {
+      opportunities: [
+        { ...base, id: 'o1', title: 'Агент на сайте', recipe: 'customer_bot', launch: 'now' },
+        {
+          ...base,
+          id: 'o2',
+          title: 'Сделки в amoCRM',
+          launch: 'soon',
+          requires: ['crm'],
+          feasibilityStatus: 'not_supported',
+          feasibility: {
+            status: 'not_supported',
+            blockers: [{ capability: 'crm', label: 'CRM', hint: '', status: 'not_supported' }],
+            available: [],
+          },
+        },
+        // Выполнимо, но готовой автоматизации нет — «скоро», не «можно сделать самим».
+        { ...base, id: 'o3', title: 'Черновики писем', launch: 'soon' },
+      ],
+    });
+    renderRoute('/analyses/a1');
+    const card = async (title: string) =>
+      (await screen.findByRole('heading', { name: title })).closest('li')!;
+    const now = await card('Агент на сайте');
+    expect(within(now).getByText('Запускается сейчас')).toBeVisible();
+    expect(within(now).getByTestId('self-service')).toBeVisible();
+    expect(within(now).getByText('ИИ-агент для клиентов')).toBeVisible();
+    const crm = await card('Сделки в amoCRM');
+    expect(within(crm).getByText('Скоро')).toBeVisible();
+    expect(within(crm).getByText(/Ketner пока не умеет этого сам: CRM/)).toBeVisible();
+    expect(within(crm).queryByTestId('self-service')).toBeNull();
+    const drafts = await card('Черновики писем');
+    expect(within(drafts).getByText('Скоро')).toBeVisible();
+    expect(within(drafts).queryByTestId('self-service')).toBeNull();
+    expect(within(drafts).queryByText('Запускается сейчас')).toBeNull();
+    // Счётчик — по тому же статусу: одна «сейчас» из трёх.
+    expect(screen.getByText('1 из 3')).toBeVisible();
   });
 
   it('«Мои заявки»: список, снимок сметы и отмена', async () => {
@@ -326,85 +334,5 @@ describe('смета внедрения в отчёте и заявка', () => 
     expect(screen.getByText(/не меняется при изменении цен/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Отменить заявку' }));
     await waitFor(() => expect(screen.getAllByText('Отменено').length).toBeGreaterThan(0));
-  });
-
-  it('карточка «сами в Ketner»: без цены в тенге, без сроков и без заявки на смету', async () => {
-    installApi({
-      ...ESTIMATE,
-      priceKzt: null,
-      workingDays: null,
-      externalApproval: false,
-      delivery: {
-        kind: 'self_service',
-        plannedWork: [],
-        teamWork: [],
-        priceList: { status: 'unknown', limitChars: 8000, maxPositions: 100, positions: null },
-        paidTierRequired: false,
-        tier: { id: 'start', name: 'Start', priceUsd: 10, monthlyRequests: 1000 },
-        volumeKnown: true,
-      },
-    });
-    renderRoute('/analyses/a1');
-    const card = (
-      await screen.findByRole('heading', { name: 'ИИ-консультант по товарам' })
-    ).closest('li')!;
-    const self = within(card).getByTestId('estimate-self-service');
-    expect(within(self).getByText('Можно сделать самим в Ketner')).toBeInTheDocument();
-    expect(self).toHaveTextContent(/если он помещается в 8\s000 символов \(примерно 100 позиций\)/);
-    expect(self).toHaveTextContent(/Тариф Start: \$10 в месяц, до 1\s000 обращений\./);
-    expect(card.textContent).not.toMatch(/₸|рабочих дней|Предварительная стоимость/);
-    expect(within(card).queryByRole('button', { name: 'Запросить точную смету' })).toBeNull();
-    expect(
-      within(card).queryByRole('button', { name: 'Из чего складывается стоимость' }),
-    ).toBeNull();
-  });
-
-  it('прайс-лист больше лимита знаний: карточка говорит, что вставить нельзя, и называет следующий шаг', async () => {
-    installApi({
-      ...ESTIMATE,
-      delivery: {
-        ...ESTIMATE.delivery,
-        teamWork: ['Подготовка каталога товаров и услуг'],
-        priceList: { status: 'too_large', limitChars: 8000, maxPositions: 100, positions: 1200 },
-        paidTierRequired: true,
-      },
-    });
-    renderRoute('/analyses/a1');
-    const card = (
-      await screen.findByRole('heading', { name: 'ИИ-консультант по товарам' })
-    ).closest('li')!;
-    expect(card).toHaveTextContent(
-      /Прайс-лист слишком большой, чтобы вставить его в знания помощника/,
-    );
-    expect(card).toHaveTextContent(
-      /Следующий шаг: сократите его до основных позиций или закажите подготовку каталога командой\./,
-    );
-  });
-
-  it('«запланировано» (WhatsApp): без цены, без оценки команды и без заявки', async () => {
-    installApi({
-      ...ESTIMATE,
-      priceKzt: null,
-      workingDays: null,
-      externalApproval: false,
-      delivery: {
-        kind: 'planned',
-        plannedWork: ['Подключение WhatsApp Business'],
-        teamWork: [],
-        priceList: null,
-        paidTierRequired: false,
-        tier: null,
-        volumeKnown: false,
-      },
-    });
-    renderRoute('/analyses/a1');
-    const card = (
-      await screen.findByRole('heading', { name: 'ИИ-консультант по товарам' })
-    ).closest('li')!;
-    const planned = within(card).getByTestId('estimate-planned');
-    expect(within(planned).getByText('Запланировано — пока без цены')).toBeInTheDocument();
-    expect(planned).toHaveTextContent(/Этого в Ketner пока нет: Подключение WhatsApp Business\./);
-    expect(card.textContent).not.toMatch(/₸|рабочих дней/);
-    expect(within(card).queryByRole('button', { name: 'Запросить точную смету' })).toBeNull();
   });
 });

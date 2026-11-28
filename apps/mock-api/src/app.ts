@@ -1,3 +1,4 @@
+import { oldHostRedirect } from './web/old-host-redirect.js';
 import { requireFeature } from './product-switches.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,6 +22,7 @@ import { createApiRouter, describeService, type ApiDeps } from './routes/index.j
 import {
   classifyPath,
   isNonCanonicalHost,
+  siteUrl,
   DISCOVERY_HOME_PRERENDER_KEY,
   renderIndexHtml,
   robotsTxt,
@@ -225,6 +227,8 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   const csp = buildContentSecurityPolicy(indexHtml);
   // Разметка открытых страниц, отрисованная при сборке сайта (apps/web/scripts/prerender.mjs).
   const { pages: prerendered, lastmods } = readPrerenderedPages(webDistPath, hasWebDist);
+  // Старый адрес ketner-ai.onrender.com → ketner.org (кроме API, вебхуков, виджета; web/old-host-redirect.ts).
+  app.use(oldHostRedirect(siteUrl));
   app.use(securityHeaders(() => csp));
 
   // CORS для /v1 открыт любому сайту: авторизация там только API-ключом в заголовке, cookie не

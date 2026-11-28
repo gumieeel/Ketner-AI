@@ -1278,3 +1278,92 @@ test('пилот: ценная автоматизация, которой Ketner
   assert.equal(crm.feasibilityStatus, 'not_supported');
   assert.equal(crm.recipe, null, 'без рецепта — без кнопки запуска');
 });
+
+test('проверки сервера после поиска: каналы клиента, которых нет, и личный помощник при закрытом чате', async () => {
+  const base = {
+    area: 'clients',
+    problem: 'Клиенты ждут ответа',
+    effort: 'low',
+    impact: { taskId: 't1', automationShare: 'medium', benefit: 'Быстрее' },
+  };
+  const discovery = JSON.stringify({
+    summary: 'Проверка',
+    opportunities: [
+      {
+        ...base,
+        title: 'ИИ-агент на сайте и в Telegram',
+        recipe: 'customer_bot',
+        solution: 'Агент отвечает клиентам на сайте и в Telegram.',
+        requires: ['customer_bot_page', 'text_generation'],
+      },
+      {
+        ...base,
+        title: 'Ответы клиентам в Instagram',
+        recipe: null,
+        solution: 'Агент отвечает на вопросы в директе Instagram.',
+        requires: ['text_generation'],
+      },
+      {
+        ...base,
+        title: 'Заявки в таблицу',
+        recipe: null,
+        solution: 'Заявка с формы попадает в таблицу, менеджер получает уведомление в Telegram.',
+        requires: ['spreadsheets_sync'],
+      },
+      {
+        ...base,
+        area: 'content',
+        title: 'Посты для Telegram-канала компании',
+        recipe: 'personal_assistant',
+        solution: 'Агент готовит посты и публикует их по расписанию.',
+        requires: ['personal_assistant'],
+      },
+      {
+        ...base,
+        area: 'documents',
+        title: 'Черновики коммерческих предложений',
+        recipe: 'personal_assistant',
+        solution: 'ИИ пишет черновик КП по короткому заданию.',
+        requires: ['personal_assistant'],
+      },
+    ],
+  });
+  const { service } = setup({ script: { context: CONTEXT_NO_QUESTIONS, discovery } });
+  const caller = guest();
+  const created = await create(service, caller, { text: LONG });
+  if (!created.ok) return assert.fail('не создан');
+  await service.whenIdle();
+  const view = await service.get(caller.userId, created.analysis.id);
+  const by = (part: string) => view!.opportunities.find((item) => item.title.includes(part))!;
+
+  // Карточка «сейчас»: канал убран из текста, готовая автоматизация осталась.
+  const agent = by('ИИ-агент на сайте');
+  assert.equal(agent.title, 'ИИ-агент на сайте');
+  assert.equal(agent.solution, 'Агент отвечает клиентам на сайте.');
+  assert.equal(agent.recipe, 'customer_bot');
+  assert.ok(!agent.requires.includes('messengers'));
+  // Остальные: нужен канал мессенджеров — «пока не поддерживается».
+  const instagram = by('Instagram');
+  assert.ok(instagram.requires.includes('messengers'));
+  assert.equal(instagram.feasibilityStatus, 'not_supported');
+  // Уведомление менеджеру в Telegram — не канал клиента.
+  assert.ok(!by('Заявки в таблицу').requires.includes('messengers'));
+  // Личный помощник при закрытом чате не называется недостающим.
+  const posts = by('Посты');
+  assert.ok(!posts.requires.includes('personal_assistant'));
+  assert.ok(posts.requires.includes('auto_posting'));
+  assert.deepEqual(
+    posts.feasibility.blockers.map((item) => item.label),
+    ['Посты по расписанию'],
+  );
+  assert.equal(posts.recipe, null);
+  const drafts = by('Черновики');
+  assert.deepEqual(drafts.requires, ['text_generation']);
+  assert.equal(drafts.recipe, null);
+  for (const item of view!.opportunities) {
+    assert.ok(
+      !item.feasibility.blockers.some((blocker) => /Помощник вам/.test(blocker.label)),
+      item.title,
+    );
+  }
+});

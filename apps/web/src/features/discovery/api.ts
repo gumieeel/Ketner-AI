@@ -2,7 +2,7 @@ import { getAuthToken } from '@/features/auth/auth-store';
 import { checkSessionInvalid, getGuestId } from '@/features/chat/api';
 import { API_BASE } from '@/lib/api-config';
 import type { Language } from '@/features/preferences/preferences-store';
-import type { BusinessProfileData, EstimatesBlock, SolutionType } from '@/features/pricing/api';
+import type { BusinessProfileData, SolutionType } from '@/features/pricing/api';
 
 /**
  * Клиент API анализа задач (`/api/analyses`, docs/api.md). Гость работает по гостевому id этого
@@ -91,12 +91,20 @@ export type SiteSourceView =
     }
   | { url: string; ok: false; reason: string };
 
+/**
+ * Статус возможности от сервера — один источник правды для счётчика, метки, кнопки и блоков:
+ * `now` — запускается сейчас, `team` — с командой Ketner, `soon` — скоро.
+ */
+export type LaunchStatus = 'now' | 'soon' | 'team';
+
 export interface OpportunityView {
   id: string;
   position: number;
   title: string;
   area: AreaId | null;
   recipe: RecipeId | null;
+  /** У старого сервера поля нет: тогда статус выводится из рецепта (report.tsx, statusOf). */
+  launch?: LaunchStatus;
   problem: string;
   solution: string;
   requires: string[];
@@ -311,8 +319,11 @@ export interface AnalysisResponse {
   rerun: RerunQuote | null;
   /** Цена повтора упавшего этапа. */
   retry: RetryQuote | null;
-  /** Предварительные сметы внедрения (только у готового анализа; null — недоступны). */
-  estimates?: EstimatesBlock | null;
+  /**
+   * Есть ли у вошедшего человека платный тариф — для статуса «С командой Ketner». Разовых смет в
+   * отчёте нет (решение владельца от 27.11.2026): сервер их считает, но в ответ не отдаёт.
+   */
+  paidTier?: boolean;
 }
 
 export function fetchAnalysis(id: string): Promise<AnalysisResponse> {

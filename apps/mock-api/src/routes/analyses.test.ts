@@ -563,7 +563,7 @@ test('план по HTTP: бесплатный краткий план, стат
   }
 });
 
-test('чат закрыт: личный помощник в отчёте — «не поддерживается», без рецепта и кнопки создания', async () => {
+test('чат закрыт: личный помощник в отчёте — «скоро», без рецепта и кнопки, помощник не назван недостающим', async () => {
   const app = await start();
   try {
     const guest = 'guest_nochat0001';
@@ -590,8 +590,11 @@ test('чат закрыт: личный помощник в отчёте — «�
     ).find((item) => item.title === 'Черновики типовых текстов');
     assert.ok(drafts);
     assert.equal(drafts.recipe, null);
-    assert.equal(drafts.feasibilityStatus, 'not_supported');
-    assert.ok(drafts.requires.includes('personal_assistant'));
+    // Пока чат закрыт, помощник не называется недостающим (анализ 28.11.2026): карточка — «скоро»,
+    // без кнопки запуска, а в требованиях — тексты ИИ, а не личный помощник.
+    assert.equal((drafts as unknown as { launch: string }).launch, 'soon');
+    assert.ok(!drafts.requires.includes('personal_assistant'));
+    assert.doesNotMatch(JSON.stringify(drafts), /Помощник вам и сотрудникам/);
     // Рецепта нет ни у одной возможности, кроме бота для клиентов.
     for (const item of report.opportunities as Array<{ recipe: string | null }>) {
       assert.ok(item.recipe === null || item.recipe === 'customer_bot', String(item.recipe));
@@ -599,4 +602,21 @@ test('чат закрыт: личный помощник в отчёте — «�
   } finally {
     await app.close();
   }
+});
+
+test('статус возможности: «сейчас» — только у доступной готовой автоматизации; команда — «с командой»', async () => {
+  const { launchOf } = await import('./analyses.js');
+  assert.equal(launchOf({ recipe: 'customer_bot', feasibilityStatus: 'ready' }, false), 'now');
+  assert.equal(launchOf({ recipe: 'customer_bot', feasibilityStatus: 'ready' }, true), 'now');
+  assert.equal(
+    launchOf({ recipe: 'customer_bot', feasibilityStatus: 'not_supported' }, false),
+    'soon',
+  );
+  assert.equal(launchOf({ recipe: null, feasibilityStatus: 'ready' }, false), 'soon');
+  assert.equal(launchOf({ recipe: null, feasibilityStatus: 'needs_integration' }, true), 'team');
+  // Личный помощник при закрытом чате недоступен — не «сейчас», даже в старом анализе.
+  assert.equal(
+    launchOf({ recipe: 'personal_assistant', feasibilityStatus: 'ready' }, false),
+    'soon',
+  );
 });
