@@ -286,13 +286,18 @@ const DISCOVERY = JSON.stringify({
   ],
 });
 
-function setup(readSiteImpl?: (url: string) => Promise<SiteResult | CrawlResult>) {
+function setup(
+  readSiteImpl?: (url: string) => Promise<SiteResult | CrawlResult>,
+  outputs: { context?: string; discovery?: string } = {},
+) {
   const requests: GatewayRequest[] = [];
   const gateway = {
     async stream(request: GatewayRequest, callbacks: GatewayStreamCallbacks) {
       requests.push(request);
       const stage = (request.task?.id ?? '').split(':')[1];
-      callbacks.onDelta(stage === 'context' ? CONTEXT : DISCOVERY);
+      callbacks.onDelta(
+        stage === 'context' ? (outputs.context ?? CONTEXT) : (outputs.discovery ?? DISCOVERY),
+      );
       callbacks.onDone({
         inputTokens: 1,
         outputTokens: 1,
@@ -461,4 +466,138 @@ test('несколько страниц сайта: факты — в промп
   // Факты и текст сайта наружу не отдаются — только пути и находки.
   assert.ok(!('facts' in api));
   assert.ok(!('text' in api));
+});
+
+test('анализ v2: находки по сайту и «что теряется» — только с проверенной цитатой; группы отчёта', async () => {
+  const context = JSON.stringify({
+    ...JSON.parse(CONTEXT),
+    siteFindings: [
+      {
+        issue: 'Запись только по телефону',
+        page: '/kontakty',
+        evidence: 'Запись только по телефону',
+      },
+      { issue: 'Придумано моделью', page: '/kontakty', evidence: 'Онлайн-записи нет и не будет' },
+    ],
+  });
+  const opportunity = (title: string, extra: Record<string, unknown>) => ({
+    title,
+    area: 'clients',
+    problem: 'Клиенты ждут',
+    solution: 'Агент отвечает',
+    requires: ['text_generation'],
+    effort: 'low',
+    impact: { taskId: 't1', automationShare: 'medium', benefit: 'Быстрее' },
+    ...extra,
+  });
+  const discovery = JSON.stringify({
+    summary: 'Итог',
+    opportunities: [
+      opportunity('Онлайн-запись', {
+        requires: ['crm'],
+        valueRank: 1,
+        valueReason: 'Теряются звонки',
+        // Страница названа неверно — сервер находит ту, где цитата есть.
+        lostNow: {
+          text: 'Звонки в обед',
+          source: 'site',
+          page: '/',
+          evidence: 'Запись только по телефону',
+        },
+        flow: {
+          trigger: 'Клиент хочет записаться',
+          steps: ['агент уточняет услугу', 'предлагает время'],
+          result: 'Запись в расписании',
+        },
+      }),
+      opportunity('Агент для покупателей', {
+        recipe: 'customer_bot',
+        requires: ['customer_bot_page', 'text_generation'],
+        valueRank: 2,
+        lostNow: {
+          text: 'Придумано',
+          source: 'description',
+          page: null,
+          evidence: 'теряем половину выручки',
+        },
+      }),
+      opportunity('Черновики ответов', { valueRank: 5 }),
+      opportunity('Сводка за неделю', { valueRank: 6 }),
+    ],
+  });
+  const { service } = setup(
+    async (url) => ({
+      ok: true,
+      url,
+      title: 'Клиника',
+      description: '',
+      text: '## / — Клиника\nЛечим зубы\n\n## /kontakty — Контакты\nЗапись только по телефону.',
+      pages: [
+        { path: '/', title: 'Клиника' },
+        { path: '/kontakty', title: 'Контакты' },
+      ],
+      facts: [],
+    }),
+    { context, discovery },
+  );
+  const created = await service.create({
+    caller: { ...caller, userId: 'guest_plan00009', ipHash: 'ip-plan-9' },
+    email: null,
+    text: 'Стоматология, сайт smile.kz',
+    language: 'ru',
+    idempotencyKey: null,
+  });
+  if (!created.ok) return assert.fail('не создан');
+  await service.whenIdle();
+  const view = await service.get('guest_plan00009', created.analysis.id);
+  assert.ok(view);
+  assert.deepEqual(
+    view.analysis.context?.siteFindings.map((item) => item.issue),
+    ['Запись только по телефону'],
+  );
+  const by = (title: string) => view.opportunities.find((item) => item.title === title)!;
+  assert.deepEqual(
+    [by('Онлайн-запись').lostNow?.page, by('Онлайн-запись').lostNow?.evidence],
+    ['/kontakty', 'Запись только по телефону'],
+  );
+  assert.equal(by('Агент для покупателей').lostNow, null, 'цитаты нет в описании');
+  assert.equal(by('Онлайн-запись').flow?.steps.length, 2);
+
+  const api = publicAnalysis(view.analysis, view.opportunities);
+  const groups = Object.fromEntries(
+    (api.opportunities as Array<{ title: string; group: string | null }>).map((item) => [
+      item.title,
+      item.group,
+    ]),
+  );
+  assert.deepEqual(groups, {
+    'Онлайн-запись': 'main',
+    'Агент для покупателей': 'main',
+    'Черновики ответов': 'other',
+    'Сводка за неделю': 'other',
+  });
+  const review = (api.source as { review: Array<{ rule: string; text: string; page: string }> })
+    .review;
+  assert.deepEqual(review[0], {
+    rule: 'site_finding',
+    text: 'Запись только по телефону',
+    page: '/kontakty',
+  });
+  assert.ok(!review.some((item) => item.text === 'Придумано моделью'));
+});
+
+test('анализ до v2 (без оценки ценности): групп нет, отчёт показывает прежний список', async () => {
+  const { service } = setup();
+  const created = await service.create({
+    caller: { ...caller, userId: 'guest_plan00010', ipHash: 'ip-plan-10' },
+    email: null,
+    text: 'Магазин одежды',
+    language: 'ru',
+    idempotencyKey: null,
+  });
+  if (!created.ok) return assert.fail('не создан');
+  await service.whenIdle();
+  const view = await service.get('guest_plan00010', created.analysis.id);
+  const api = publicAnalysis(view!.analysis, view!.opportunities);
+  assert.ok((api.opportunities as Array<{ group: unknown }>).every((item) => item.group === null));
 });

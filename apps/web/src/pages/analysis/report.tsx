@@ -183,6 +183,30 @@ export function Report({
   const featuredId =
     main?.id ?? listed.find((item) => item.feasibilityStatus !== 'not_supported')?.id ?? null;
   const hidden = listed.length - visible.length;
+  // Анализ v2: группы отчёта решает сервер (routes/analyses.ts, withGroups).
+  const grouped = sorted.some((item) => item.group);
+  const groups = {
+    main: sorted
+      .filter((item) => item.group === 'main')
+      .sort((a, b) => (a.valueRank ?? 99) - (b.valueRank ?? 99)),
+    today: sorted.filter((item) => item.group === 'today'),
+    other: sorted.filter((item) => item.group === 'other'),
+  };
+  const card = (item: OpportunityView, featured: boolean) => {
+    const actions = actionsFor(item, featured);
+    return (
+      <OpportunityCard
+        key={item.id}
+        item={item}
+        featured={featured}
+        situation={situation}
+        action={actions.row}
+        moreActions={actions.details}
+        paidTier={paidTier}
+        siteUrl={analysis.source?.ok ? analysis.source.url : null}
+      />
+    );
+  };
 
   return (
     <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] xl:items-start">
@@ -190,58 +214,83 @@ export function Report({
         <SummaryCard analysis={analysis} />
         <SiteReview analysis={analysis} />
 
-        <section aria-labelledby="result-title">
-          <h2
-            id="result-title"
-            className="flex items-center gap-2.5 text-[20px] font-medium tracking-[-0.01em] text-text"
-          >
-            <SparkleIcon aria-hidden="true" className="size-5 text-accent" />
-            {t('analysis.ready.title')}
-          </h2>
-          {listed.length === 0 ? (
-            <p className="mt-3 text-[15px] leading-6 text-muted">{t('analysis.ready.empty')}</p>
-          ) : (
-            <ul className="mt-4 flex flex-col gap-3">
-              {visible.map((item) => {
-                const featured = item.id === featuredId;
-                const actions = actionsFor(item, featured);
-                return (
-                  <OpportunityCard
-                    key={item.id}
-                    item={item}
-                    featured={featured}
-                    situation={situation}
-                    action={actions.row}
-                    moreActions={actions.details}
-                    paidTier={paidTier}
-                  />
-                );
-              })}
-            </ul>
-          )}
-          {hidden > 0 || showAll ? (
-            <button
-              type="button"
-              aria-expanded={showAll}
-              onClick={() => setShowAll((value) => !value)}
-              className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-[14px] text-muted hover:text-text md:min-h-0"
+        {grouped ? (
+          <>
+            <GroupSection id="group-main" title={t('analysis.groups.main')}>
+              {groups.main.map((item, index) => card(item, index === 0))}
+            </GroupSection>
+            {groups.today.length > 0 ? (
+              <GroupSection id="group-today" title={t('analysis.groups.today')}>
+                {groups.today.map((item) => card(item, false))}
+              </GroupSection>
+            ) : null}
+            {groups.other.length > 0 ? (
+              <GroupSection
+                id="group-other"
+                title={t('analysis.groups.other')}
+                collapsed={!showAll}
+                onToggle={() => setShowAll((value) => !value)}
+                count={groups.other.length}
+              >
+                {groups.other.map((item) => card(item, false))}
+              </GroupSection>
+            ) : null}
+          </>
+        ) : (
+          <section aria-labelledby="result-title">
+            <h2
+              id="result-title"
+              className="flex items-center gap-2.5 text-[20px] font-medium tracking-[-0.01em] text-text"
             >
-              <ChevronDownIcon
-                aria-hidden="true"
-                className={cn('size-4 transition-transform', showAll && 'rotate-180')}
-              />
-              {showAll
-                ? t('analysis.result.showLess')
-                : t('analysis.result.showMore', { count: hidden })}
-            </button>
-          ) : null}
-          {listed.length > 0 ? (
-            <div className="mt-4 flex items-start gap-3 rounded-2xl border border-stroke bg-surface px-5 py-4">
-              <InfoIcon aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-accent" />
-              <p className="text-[14px] leading-6 text-text">{t('analysis.result.choose')}</p>
-            </div>
-          ) : null}
-        </section>
+              <SparkleIcon aria-hidden="true" className="size-5 text-accent" />
+              {t('analysis.ready.title')}
+            </h2>
+            {listed.length === 0 ? (
+              <p className="mt-3 text-[15px] leading-6 text-muted">{t('analysis.ready.empty')}</p>
+            ) : (
+              <ul className="mt-4 flex flex-col gap-3">
+                {visible.map((item) => {
+                  const featured = item.id === featuredId;
+                  const actions = actionsFor(item, featured);
+                  return (
+                    <OpportunityCard
+                      key={item.id}
+                      item={item}
+                      featured={featured}
+                      situation={situation}
+                      action={actions.row}
+                      moreActions={actions.details}
+                      paidTier={paidTier}
+                      siteUrl={analysis.source?.ok ? analysis.source.url : null}
+                    />
+                  );
+                })}
+              </ul>
+            )}
+            {hidden > 0 || showAll ? (
+              <button
+                type="button"
+                aria-expanded={showAll}
+                onClick={() => setShowAll((value) => !value)}
+                className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-[14px] text-muted hover:text-text md:min-h-0"
+              >
+                <ChevronDownIcon
+                  aria-hidden="true"
+                  className={cn('size-4 transition-transform', showAll && 'rotate-180')}
+                />
+                {showAll
+                  ? t('analysis.result.showLess')
+                  : t('analysis.result.showMore', { count: hidden })}
+              </button>
+            ) : null}
+            {listed.length > 0 ? (
+              <div className="mt-4 flex items-start gap-3 rounded-2xl border border-stroke bg-surface px-5 py-4">
+                <InfoIcon aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-accent" />
+                <p className="text-[14px] leading-6 text-text">{t('analysis.result.choose')}</p>
+              </div>
+            ) : null}
+          </section>
+        )}
 
         {analysis.context ? <ProfileEditor analysis={analysis} onChanged={onChanged} /> : null}
 
@@ -546,6 +595,90 @@ function TeamBox({ paidTier }: { paidTier: boolean }) {
   );
 }
 
+/** Группа отчёта анализа v2: заголовок и карточки; «Что ещё можно сделать» — свёрнута. */
+function GroupSection({
+  id,
+  title,
+  children,
+  collapsed = false,
+  onToggle,
+  count,
+}: {
+  id: string;
+  title: string;
+  children: ReactNode;
+  collapsed?: boolean;
+  onToggle?: () => void;
+  count?: number;
+}) {
+  const { t } = useTranslation();
+  return (
+    <section aria-labelledby={`${id}-title`}>
+      <h2
+        id={`${id}-title`}
+        className="flex items-center gap-2.5 text-[20px] font-medium tracking-[-0.01em] text-text"
+      >
+        {title}
+      </h2>
+      {collapsed ? null : <ul className="mt-4 flex flex-col gap-3">{children}</ul>}
+      {onToggle ? (
+        <button
+          type="button"
+          aria-expanded={!collapsed}
+          onClick={onToggle}
+          className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-[14px] text-muted hover:text-text md:min-h-0"
+        >
+          <ChevronDownIcon
+            aria-hidden="true"
+            className={cn('size-4 transition-transform', !collapsed && 'rotate-180')}
+          />
+          {collapsed
+            ? t('analysis.result.showMore', { count: count ?? 0 })
+            : t('analysis.result.showLess')}
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
+/** «Сейчас теряется»: со ссылкой на страницу сайта или пометкой «по вашим словам». */
+function LostNowLine({
+  lost,
+  siteUrl,
+}: {
+  lost: NonNullable<OpportunityView['lostNow']>;
+  siteUrl: string | null;
+}) {
+  const { t } = useTranslation();
+  const link =
+    lost.source === 'site' && lost.page && siteUrl
+      ? (() => {
+          try {
+            return new URL(lost.page, siteUrl).toString();
+          } catch {
+            return null;
+          }
+        })()
+      : null;
+  return (
+    <p className="mt-2 text-[14px] leading-6 text-text" data-testid="lost-now">
+      {t('analysis.report.lostNow', { text: withoutEndPunctuation(lost.text) })}{' '}
+      {link ? (
+        <a
+          href={link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[13px] text-subtle underline underline-offset-4 hover:text-text"
+        >
+          {lost.page === '/' ? t('analysis.siteReview.home') : lost.page}
+        </a>
+      ) : lost.source === 'site' ? null : (
+        <span className="text-[13px] text-subtle">{t('analysis.report.lostNowYourWords')}</span>
+      )}
+    </p>
+  );
+}
+
 function OpportunityCard({
   item,
   action,
@@ -553,8 +686,11 @@ function OpportunityCard({
   situation,
   featured = false,
   paidTier = false,
+  siteUrl = null,
 }: {
   item: OpportunityView;
+  /** Адрес сайта — для ссылки «что теряется» на страницу. */
+  siteUrl?: string | null;
   /** Есть ли платный тариф — для блока «С командой Ketner». */
   paidTier?: boolean;
   /** Главное действие на виду (у рекомендуемой возможности). */
@@ -606,7 +742,21 @@ function OpportunityCard({
             >
               {item.title}
             </h4>
+            {item.group === 'main' && item.valueReason ? (
+              <p className="mt-0.5 text-[13px] leading-5 text-accent" data-testid="value-reason">
+                {item.valueReason}
+              </p>
+            ) : null}
             <p className="mt-1 text-[14px] leading-6 text-muted">{item.solution}</p>
+            {item.lostNow ? <LostNowLine lost={item.lostNow} siteUrl={siteUrl} /> : null}
+            {item.flow ? (
+              <p className="mt-2 text-[14px] leading-6 text-text" data-testid="flow">
+                <span className="font-medium">{t('analysis.report.flow')}</span>{' '}
+                {[item.flow.trigger, ...item.flow.steps, item.flow.result]
+                  .map((part) => withoutEndPunctuation(part))
+                  .join(' → ')}
+              </p>
+            ) : null}
             <ul className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-muted">
               <li className="inline-flex items-center gap-1.5">
                 <ChartIcon aria-hidden="true" className="size-4 text-accent" />
@@ -615,7 +765,7 @@ function OpportunityCard({
               {item.impact.kind === 'estimate' ? (
                 <li className="inline-flex items-center gap-1.5">
                   <ClockIcon aria-hidden="true" className="size-4" />
-                  {t('analysis.ready.hours', {
+                  {t('analysis.report.estimateHours', {
                     from: item.impact.hoursPerWeek[0],
                     to: item.impact.hoursPerWeek[1],
                   })}

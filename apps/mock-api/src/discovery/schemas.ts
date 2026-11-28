@@ -34,6 +34,47 @@ const list = <T extends z.ZodType>(item: T, max: number) =>
 
 const source = z.enum(['user', 'inferred']).catch('inferred');
 
+/** Список, в котором неверный элемент отбрасывается, а не ломает весь ответ. */
+const tolerantList = <T extends z.ZodType>(item: T, max: number) =>
+  z
+    .array(z.unknown())
+    .default([])
+    .catch([])
+    .transform((items) =>
+      items
+        .flatMap((value) => {
+          const parsed = item.safeParse(value);
+          return parsed.success ? [parsed.data as z.output<T>] : [];
+        })
+        .slice(0, max),
+    );
+
+export const siteFindingSchema = z.object({
+  issue: requiredText(220),
+  /** Путь страницы сайта, например «/kontakty». */
+  page: requiredText(200),
+  /** Дословная цитата с этой страницы. */
+  evidence: requiredText(240),
+});
+export type SiteFindingOutput = z.infer<typeof siteFindingSchema>;
+
+/** Что теряется сейчас — с источником и цитатой (сервер проверяет цитату). */
+export const lostNowSchema = z.object({
+  text: requiredText(240),
+  source: z.enum(['site', 'answer', 'description']).catch('description'),
+  page: text(200).nullable().optional().default(null),
+  evidence: requiredText(240),
+});
+export type LostNow = z.infer<typeof lostNowSchema>;
+
+/** Как будет работать: событие → шаги → результат. */
+export const flowSchema = z.object({
+  trigger: requiredText(200),
+  steps: list(requiredText(160), 6),
+  result: requiredText(200),
+});
+export type Flow = z.infer<typeof flowSchema>;
+
 const sourced = (max: number) => z.object({ text: requiredText(max), source });
 
 /** Число из текста пользователя: только положительное и правдоподобное, иначе null. */
@@ -110,6 +151,11 @@ export const contextOutputSchema = z.object({
    * Структурированный профиль бизнеса (discovery/profile.ts). Модель могла его не вернуть —
    * тогда его нет, анализ от этого не ломается; человек заполнит профиль сам.
    */
+  /**
+   * Находки по сайту (анализ v2, B3): что сейчас теряет заявки, со страницей и цитатой. Сервер
+   * оставляет только те, чья цитата действительно есть в тексте этой страницы.
+   */
+  siteFindings: tolerantList(siteFindingSchema, 6),
   // Пометку «правил человек» ставит только сервер, не модель.
   profile: businessProfileOutputSchema
     .transform(({ edited: _edited, ...rest }) => rest)
@@ -181,6 +227,13 @@ export const opportunityOutputSchema = z.object({
   unknowns: list(requiredText(160), 4).catch([]),
   /** Допущения, на которых держится оценка. */
   assumptions: list(requiredText(160), 4).catch([]),
+  /** Анализ v2 (B3): что теряется сейчас; без проверяемой цитаты сервер его не показывает. */
+  lostNow: lostNowSchema.nullable().optional().default(null).catch(null),
+  /** Анализ v2 (B3): событие → шаги → результат. */
+  flow: flowSchema.nullable().optional().default(null).catch(null),
+  /** Место по ценности для этого бизнеса (1 — самое ценное) и одна фраза почему. */
+  valueRank: z.number().int().min(1).max(30).nullable().optional().default(null).catch(null),
+  valueReason: text(220).default('').catch(''),
 });
 
 /** Работ на одну возможность. */

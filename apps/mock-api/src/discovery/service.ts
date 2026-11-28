@@ -88,6 +88,7 @@ import {
 import type { DiscoveryStore } from './store.js';
 import { contextTemplate, discoveryTemplate, planTemplate } from './templates.js';
 import { gateQuestions, needsKeyAnswer } from './key-facts.js';
+import { verifyLostNow, verifySiteFindings } from './evidence.js';
 import { playbookFor, playbookForPrompt } from './playbooks/index.js';
 import { customerChannelsIn, withoutCustomerChannels } from './channel-guard.js';
 import { productSwitch } from '../product-switches.js';
@@ -1642,7 +1643,9 @@ export class DiscoveryService {
         );
         return;
       }
-      const context = verifyTaskNumbers(result.data, started.inputText);
+      const checked = verifyTaskNumbers(result.data, started.inputText);
+      // Находки по сайту — только с цитатой, которая есть на названной странице (evidence.ts).
+      const context = { ...checked, siteFindings: verifySiteFindings(checked.siteFindings, site) };
       // Минимум фактов: о каждом неизвестном ключевом факте — обязательный вопрос (key-facts.ts).
       const questions = gateQuestions(context, started.language);
       const after = await this.mutate(caller.userId, id, (analysis) => ({
@@ -1691,6 +1694,8 @@ export class DiscoveryService {
             playbookFor(context.profile?.industry, context.profile?.businessModel),
             started.language,
           ),
+          // Описание человека — чтобы «что теряется» могло сослаться на его слова дословно.
+          started.inputText,
         ),
         schema: discoveryOutputSchema,
         templateOutput: discoveryTemplate(started.language),
@@ -1840,6 +1845,13 @@ export class DiscoveryService {
       ...output.opportunities.map((item) => this.guardOpportunity(item, user, analysis.language)),
       ...(serverBot ? [serverBot] : []),
     ];
+    const evidence = {
+      site: analysis.source?.ok ? analysis.source : null,
+      description: analysis.inputText,
+      answers: Object.values(analysis.answers).flatMap((answer) =>
+        'value' in answer ? [answer.value] : [],
+      ),
+    };
     const built = drafts.map((item, position): Opportunity => {
       const feasibility = assessFeasibility(
         item.requires,
@@ -1871,6 +1883,10 @@ export class DiscoveryService {
         workItems: item.workItems,
         unknowns: item.unknowns,
         assumptions: item.assumptions,
+        lostNow: verifyLostNow(item.lostNow ?? null, evidence),
+        flow: item.flow ?? null,
+        valueRank: item.valueRank ?? null,
+        valueReason: item.valueReason ?? '',
         feasibilityStatus: feasibility.status,
         feasibility,
         impact: estimateImpact(item, context, analysis.language),

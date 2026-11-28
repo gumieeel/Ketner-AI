@@ -1,3 +1,4 @@
+import type { Flow, LostNow } from './schemas.js';
 import type { SiteFact } from './site-facts.js';
 import type { Language } from '../types.js';
 import type { CapabilityId } from './capabilities.js';
@@ -108,6 +109,13 @@ export interface Opportunity {
   unknowns?: string[];
   /** Допущения оценки. */
   assumptions?: string[];
+  /** Анализ v2 (B3): что теряется сейчас — только с проверенной цитатой (evidence.ts). */
+  lostNow?: LostNow | null;
+  /** Анализ v2 (B3): событие → шаги → результат. */
+  flow?: Flow | null;
+  /** Место по ценности для этого бизнеса (1 — главное) и почему; у старых анализов нет. */
+  valueRank?: number | null;
+  valueReason?: string;
   feasibilityStatus: FeasibilityStatus;
   feasibility: Feasibility;
   impact: Impact;

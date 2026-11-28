@@ -105,6 +105,20 @@ export interface OpportunityView {
   recipe: RecipeId | null;
   /** У старого сервера поля нет: тогда статус выводится из рецепта (report.tsx, statusOf). */
   launch?: LaunchStatus;
+  /** Группа отчёта (анализ v2): `null` или нет поля — прежний список без групп. */
+  group?: 'main' | 'today' | 'other' | null;
+  /** Что теряется сейчас — с проверенной сервером цитатой. */
+  lostNow?: {
+    text: string;
+    source: 'site' | 'answer' | 'description';
+    page: string | null;
+    evidence: string;
+  } | null;
+  /** Как будет работать: событие → шаги → результат. */
+  flow?: { trigger: string; steps: string[]; result: string } | null;
+  /** Место по ценности для этого бизнеса (1 — главное) и почему. */
+  valueRank?: number | null;
+  valueReason?: string;
   problem: string;
   solution: string;
   requires: string[];

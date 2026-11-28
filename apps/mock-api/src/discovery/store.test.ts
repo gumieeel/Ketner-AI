@@ -99,6 +99,7 @@ async function storeContract(store: DiscoveryStore): Promise<void> {
         availableData: [],
         missing: [],
         questions: [],
+        siteFindings: [],
       },
     },
     1,

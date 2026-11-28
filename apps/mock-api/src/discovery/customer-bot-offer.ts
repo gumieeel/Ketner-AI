@@ -103,5 +103,29 @@ export function customerBotOffer(
     ],
     unknowns: [],
     assumptions: [],
+    // Сервер добавляет эту возможность сам: процесс известен, «что теряется» — без цитаты не
+    // показывается (её может дать только модель по словам человека).
+    lostNow: null,
+    flow: ru
+      ? {
+          trigger: 'Клиент открывает агента по ссылке, QR-коду или кнопке на сайте',
+          steps: [
+            'агент отвечает на частый вопрос',
+            'уточняет, что нужно клиенту',
+            'собирает контакт',
+          ],
+          result: 'Заявка приходит владельцу на почту или в Telegram',
+        }
+      : {
+          trigger: 'A customer opens the agent by link, QR code or site button',
+          steps: [
+            'the agent answers a common question',
+            'clarifies what the customer needs',
+            'collects a contact',
+          ],
+          result: 'The request reaches the owner by email or Telegram',
+        },
+    valueRank: null,
+    valueReason: '',
   } as DraftOpportunity;
 }

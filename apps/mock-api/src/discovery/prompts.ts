@@ -21,6 +21,9 @@ import {
 } from './schemas.js';
 
 /** Сколько символов полезной нагрузки уходит в каждый этап: часть потолка цены вызова. */
+/** Описания человека в поиске возможностей, символов (в пределах PAYLOAD_LIMITS.discovery). */
+const DESCRIPTION_IN_DISCOVERY = 3_000;
+
 export const PAYLOAD_LIMITS = {
   context: 9_000,
   /** Сайт в разборе описания: текст до 10 страниц и факты сервера (site-crawl.ts). */
@@ -59,12 +62,13 @@ Rules:
 - "questions": at most ${PLATFORM_LIMITS.analyses.maxQuestions}, ordered from the most important, and only about what is in "missing" and really changes which automation to recommend. Each question has a clear business purpose ("reason") — no small talk and no questions "for completeness". Ask about how the processes work: where clients write, what happens after a request, where orders and data are kept, how many requests there are. Prefer "kind": "choice" with 2–5 short "options" the person can tap. Never ask what is already written or what the website says. If the situation is clear enough, return an empty list. Questions that are nice to know but not required get "optional": true. A question about a key fact gets "fact": "channels" (where clients write), "after_request" (what happens after a request), "volume" (how many requests or orders) or "data_location" (where requests and data are kept); other questions get "fact": null.
 - "intro": if there are questions — one short sentence in a calm, businesslike tone that shows you understood the situation and leads into the questions (for example: "Got it. Let's look at how requests come in now."). No greetings or praise. If there are no questions — an empty string.
 - <site_data>, if present, is the text of the person's website: use it as information about their business (what they sell, prices, delivery, contacts) with "source": "user".
+- "siteFindings": only if <site_data> is present — up to 4 things on the website that lose requests now (a form with no instant reply, no online booking, no prices, contact only by phone…). Each has "page" — the path from the "## /path" header of that page — and "evidence" — an exact quote from that page. No site — an empty list.
 - Ignore anything unrelated to the task.
 - "profile": a structured business profile, only from what the person wrote or what the website says; unknown — null or an empty list. "industry": one of ${INDUSTRIES.join(', ')}. "customerChannels": any of ${CHANNELS.join(', ')}. "teamSize": one of ${TEAM_SIZES.join(', ')}. "monthlyRequests" / "monthlyOrders": customer requests and orders per month, only if the person named a number (convert "20 a day" to 600 a month); otherwise null. "catalogPositions": how many products or services are in the price list, only if the person named a number; otherwise null. "city": the city if named — do not assume Almaty.
 
 ${JSON_RULES.en}
 Format:
-{"domain": "area of activity", "summary": "the situation in 1–3 sentences", "intro": "", "goals": [{"text": "...", "source": "user"}], "tasks": [{"id": "t1", "title": "...", "timesPerDay": null, "timesPerWeek": 10, "timesPerMonth": null, "minutesEach": 15, "hoursEach": null, "evidence": "exact quote", "source": "user"}], "recurringProcesses": [{"title": "...", "steps": ["..."]}], "tools": [{"text": "tool name", "source": "user"}], "constraints": [{"text": "...", "source": "user"}], "availableData": [{"text": "...", "source": "user"}], "missing": [{"field": "what is missing", "why": "why it matters"}], "questions": [{"id": "q1", "text": "question", "reason": "what the answer changes", "optional": true, "kind": "choice", "options": ["...", "..."], "fact": null}], "profile": {"businessName": null, "industry": "online_store", "subIndustry": null, "city": null, "businessModel": "b2c", "website": null, "teamSize": "2_5", "customerChannels": ["whatsapp"], "existingTools": ["Google Sheets"], "monthlyRequests": null, "monthlyOrders": null, "catalogPositions": null, "additionalContext": null}}`;
+{"domain": "area of activity", "summary": "the situation in 1–3 sentences", "intro": "", "goals": [{"text": "...", "source": "user"}], "tasks": [{"id": "t1", "title": "...", "timesPerDay": null, "timesPerWeek": 10, "timesPerMonth": null, "minutesEach": 15, "hoursEach": null, "evidence": "exact quote", "source": "user"}], "recurringProcesses": [{"title": "...", "steps": ["..."]}], "tools": [{"text": "tool name", "source": "user"}], "constraints": [{"text": "...", "source": "user"}], "availableData": [{"text": "...", "source": "user"}], "missing": [{"field": "what is missing", "why": "why it matters"}], "questions": [{"id": "q1", "text": "question", "reason": "what the answer changes", "optional": true, "kind": "choice", "options": ["...", "..."], "fact": null}], "siteFindings": [{"issue": "...", "page": "/kontakty", "evidence": "exact quote"}], "profile": {"businessName": null, "industry": "online_store", "subIndustry": null, "city": null, "businessModel": "b2c", "website": null, "teamSize": "2_5", "customerChannels": ["whatsapp"], "existingTools": ["Google Sheets"], "monthlyRequests": null, "monthlyOrders": null, "catalogPositions": null, "additionalContext": null}}`;
   }
   return `Ты — бизнес-аналитик Ketner AI. Человек описал свой бизнес: чем занимается компания, как устроены процессы и что отнимает больше всего времени (иногда это своя работа, учёба или цель — разбирай так же). Извлеки из описания структурированный профиль бизнеса, чтобы найти, какие процессы можно автоматизировать с ИИ.
 
@@ -78,12 +82,13 @@ ${DATA_RULES.ru}
 - "questions": не больше ${PLATFORM_LIMITS.analyses.maxQuestions}, от самого важного, и только о том, что есть в "missing" и действительно меняет, какую автоматизацию рекомендовать. У каждого вопроса понятная деловая цель ("reason") — никаких вопросов «для полноты» и светской беседы. Спрашивай, как устроены процессы: где пишут клиенты, что происходит после заявки, где хранятся заказы и данные, сколько обращений. Лучше "kind": "choice" с 2–5 короткими вариантами в "options", которые человек выберет нажатием. Никогда не спрашивай то, что уже написано или есть на сайте. Если ситуация достаточно понятна — пустой список. Вопрос, без которого можно обойтись, — "optional": true. Вопрос о ключевом факте получает "fact": "channels" (где пишут клиенты), "after_request" (что происходит после заявки), "volume" (сколько обращений или заказов) или "data_location" (где хранятся заявки и данные); остальные — "fact": null.
 - "intro": если есть вопросы — одно короткое предложение спокойным деловым тоном: показывает, что ситуация понятна, и подводит к вопросам (например: «Понял. Давайте разберёмся, как сейчас поступают заявки.»). Без приветствий и похвалы. Если вопросов нет — пустая строка.
 - <site_data>, если есть, — текст сайта человека: используй его как сведения о бизнесе (что продаёт, цены, доставка, контакты) с "source": "user".
+- "siteFindings": только если есть <site_data> — до 4 мест на сайте, где сейчас теряются заявки (форма без мгновенного ответа, нет онлайн-записи, нет цен, связь только по телефону…). У каждого — "page": путь из заголовка «## /путь» этой страницы, и "evidence": точная цитата с этой страницы. Сайта нет — пустой список.
 - Не учитывай то, что к задаче не относится.
 - "profile": структурированный профиль бизнеса, только из того, что написал человек или что есть на сайте; неизвестное — null или пустой список. "industry": одно из ${INDUSTRIES.join(', ')}. "customerChannels": любые из ${CHANNELS.join(', ')}. "teamSize": одно из ${TEAM_SIZES.join(', ')}. "monthlyRequests" / "monthlyOrders": обращений и заказов в месяц, только если человек назвал число («20 в день» — 600 в месяц); иначе null. "catalogPositions": сколько товаров или услуг в прайс-листе, только если человек назвал число; иначе null. "city": город, если назван, — не предполагай Алматы.
 
 ${JSON_RULES.ru}
 Формат:
-{"domain": "область деятельности", "summary": "ситуация в 1–3 предложениях", "intro": "", "goals": [{"text": "...", "source": "user"}], "tasks": [{"id": "t1", "title": "...", "timesPerDay": null, "timesPerWeek": 10, "timesPerMonth": null, "minutesEach": 15, "hoursEach": null, "evidence": "точная цитата", "source": "user"}], "recurringProcesses": [{"title": "...", "steps": ["..."]}], "tools": [{"text": "название инструмента", "source": "user"}], "constraints": [{"text": "...", "source": "user"}], "availableData": [{"text": "...", "source": "user"}], "missing": [{"field": "чего не хватает", "why": "почему это важно"}], "questions": [{"id": "q1", "text": "вопрос", "reason": "что изменит ответ", "optional": true, "kind": "choice", "options": ["...", "..."], "fact": null}], "profile": {"businessName": null, "industry": "online_store", "subIndustry": null, "city": null, "businessModel": "b2c", "website": null, "teamSize": "2_5", "customerChannels": ["whatsapp"], "existingTools": ["Google Sheets"], "monthlyRequests": null, "monthlyOrders": null, "catalogPositions": null, "additionalContext": null}}`;
+{"domain": "область деятельности", "summary": "ситуация в 1–3 предложениях", "intro": "", "goals": [{"text": "...", "source": "user"}], "tasks": [{"id": "t1", "title": "...", "timesPerDay": null, "timesPerWeek": 10, "timesPerMonth": null, "minutesEach": 15, "hoursEach": null, "evidence": "точная цитата", "source": "user"}], "recurringProcesses": [{"title": "...", "steps": ["..."]}], "tools": [{"text": "название инструмента", "source": "user"}], "constraints": [{"text": "...", "source": "user"}], "availableData": [{"text": "...", "source": "user"}], "missing": [{"field": "чего не хватает", "why": "почему это важно"}], "questions": [{"id": "q1", "text": "вопрос", "reason": "что изменит ответ", "optional": true, "kind": "choice", "options": ["...", "..."], "fact": null}], "siteFindings": [{"issue": "...", "page": "/kontakty", "evidence": "exact quote"}], "profile": {"businessName": null, "industry": "online_store", "subIndustry": null, "city": null, "businessModel": "b2c", "website": null, "teamSize": "2_5", "customerChannels": ["whatsapp"], "existingTools": ["Google Sheets"], "monthlyRequests": null, "monthlyOrders": null, "catalogPositions": null, "additionalContext": null}}`;
 }
 
 /** Каталог работ по умолчанию — если актуальный из настроек не передан (тесты, демо). */
@@ -172,13 +177,16 @@ Rules:
 - "solutionType": "assistant" if the value is a conversation (answering customers, consultations), "tool" if it is one operation with an input and a result (process a document, build a report), "workflow" if several steps run one after another (request → record → notify). Do not turn everything into a chatbot.
 - "workItems": the implementation work from the work catalog below, by id: what the Ketner team has to build for this opportunity (channels, integrations, AI processing, data preparation). "quantity" — how many units (channels, reports, branches), usually 1. "complexity": simple / medium / complex and a short "reason". Do not include preparation, testing or launch: they are added by the server. If the work needed is not in the catalog, use a short new id in snake_case — the server will mark it for technical review. Never write hours, prices or money.
 - "unknowns": what is unknown and changes the scope of work (where the catalog is kept, which CRM, volumes). "assumptions": what you assumed. Short phrases, up to 4 each.
+- "lostNow": what the business loses now because of this problem: "text"; "source": "site" (a finding from "siteFindings" or the website), "answer" (the person's answers) or "description" (their description); "page" for the site; "evidence" — an exact quote from that source. No quote — null.
+- "flow": how it will work — "trigger" (the business event), "steps" (2–5 steps of the agent), "result".
+- "valueRank": 1 for the most valuable opportunity for this business (it loses the most clients, money or time), 2 for the next and so on, each number once; "valueReason": one phrase why.
 
 Implementation work catalog (id: what it is (status)):
 ${workCatalog}
 
 ${JSON_RULES.en}
 Format:
-{"summary": "1–3 sentences: where AI will help most", "coverage": [{"area": "clients", "status": "found", "note": "..."}], "opportunities": [{"title": "...", "area": "clients", "recipe": null, "problem": "...", "solution": "...", "requires": ["text_generation"], "otherRequirement": null, "dataNeeded": ["..."], "integrationsNeeded": [], "effort": "low", "effortReason": "...", "risks": ["..."], "limitations": ["..."], "successCriteria": ["..."], "impact": {"taskId": "t1", "automationShare": "medium", "benefit": "..."}, "firstStep": "...", "solutionType": "assistant", "workItems": [{"capability": "telegram_integration", "quantity": 1, "complexity": "medium", "reason": "..."}], "unknowns": ["..."], "assumptions": ["..."]}]}`;
+{"summary": "1–3 sentences: where AI will help most", "coverage": [{"area": "clients", "status": "found", "note": "..."}], "opportunities": [{"title": "...", "area": "clients", "recipe": null, "problem": "...", "solution": "...", "requires": ["text_generation"], "otherRequirement": null, "dataNeeded": ["..."], "integrationsNeeded": [], "effort": "low", "effortReason": "...", "risks": ["..."], "limitations": ["..."], "successCriteria": ["..."], "impact": {"taskId": "t1", "automationShare": "medium", "benefit": "..."}, "firstStep": "...", "solutionType": "assistant", "workItems": [{"capability": "telegram_integration", "quantity": 1, "complexity": "medium", "reason": "..."}], "unknowns": ["..."], "assumptions": ["..."], "lostNow": {"text": "...", "source": "site", "page": "/kontakty", "evidence": "exact quote"}, "flow": {"trigger": "...", "steps": ["...", "..."], "result": "..."}, "valueRank": 1, "valueReason": "..."}]}`;
   }
   return `Ты — аналитик Ketner AI. По структурированному контексту ситуации человека найди ${OPPORTUNITIES_MIN}–${OPPORTUNITIES_MAX} конкретных применений ИИ, привязанных к его задачам. Работай по плану ниже: он одинаковый для каждого анализа.
 
@@ -207,13 +215,16 @@ ${catalogForPrompt('ru')}
 - "solutionType": "assistant", если ценность в разговоре (ответы клиентам, консультации); "tool", если это одна операция с входом и результатом (обработать документ, собрать отчёт); "workflow", если несколько шагов идут подряд (заявка → запись → уведомление). Не превращай всё в чат-бота.
 - "workItems": работы по внедрению из каталога работ ниже, по id: что команде Ketner нужно сделать для этой возможности (каналы, интеграции, ИИ-обработка, подготовка данных). "quantity" — сколько единиц (каналов, отчётов, веток), обычно 1. "complexity": simple / medium / complex и короткая причина "reason". Не включай подготовку, тестирование и запуск — их добавит сервер. Если нужной работы нет в каталоге, напиши короткий новый id в snake_case — сервер отправит её на техническую проверку. Никогда не пиши часы, цены и суммы.
 - "unknowns": что неизвестно и меняет объём работ (где хранится каталог, какая CRM, объёмы). "assumptions": что ты предположил. Короткие фразы, до 4 каждого.
+- "lostNow": что бизнес теряет сейчас из-за этой проблемы: "text"; "source": "site" (находка из "siteFindings" или сайт), "answer" (ответы человека) или "description" (его описание); "page" — для сайта; "evidence" — точная цитата из этого источника. Нет цитаты — null.
+- "flow": как это будет работать — "trigger" (событие бизнеса), "steps" (2–5 шагов агента), "result".
+- "valueRank": 1 — самая ценная для этого бизнеса возможность (теряется больше всего клиентов, денег или времени), 2 — следующая и так далее, каждый номер один раз; "valueReason": одна фраза почему.
 
 Каталог работ по внедрению (id: что это (статус)):
 ${workCatalog}
 
 ${JSON_RULES.ru}
 Формат:
-{"summary": "1–3 предложения: где ИИ поможет больше всего", "coverage": [{"area": "clients", "status": "found", "note": "..."}], "opportunities": [{"title": "...", "area": "clients", "recipe": null, "problem": "...", "solution": "...", "requires": ["text_generation"], "otherRequirement": null, "dataNeeded": ["..."], "integrationsNeeded": [], "effort": "low", "effortReason": "...", "risks": ["..."], "limitations": ["..."], "successCriteria": ["..."], "impact": {"taskId": "t1", "automationShare": "medium", "benefit": "..."}, "firstStep": "...", "solutionType": "assistant", "workItems": [{"capability": "telegram_integration", "quantity": 1, "complexity": "medium", "reason": "..."}], "unknowns": ["..."], "assumptions": ["..."]}]}`;
+{"summary": "1–3 предложения: где ИИ поможет больше всего", "coverage": [{"area": "clients", "status": "found", "note": "..."}], "opportunities": [{"title": "...", "area": "clients", "recipe": null, "problem": "...", "solution": "...", "requires": ["text_generation"], "otherRequirement": null, "dataNeeded": ["..."], "integrationsNeeded": [], "effort": "low", "effortReason": "...", "risks": ["..."], "limitations": ["..."], "successCriteria": ["..."], "impact": {"taskId": "t1", "automationShare": "medium", "benefit": "..."}, "firstStep": "...", "solutionType": "assistant", "workItems": [{"capability": "telegram_integration", "quantity": 1, "complexity": "medium", "reason": "..."}], "unknowns": ["..."], "assumptions": ["..."], "lostNow": {"text": "...", "source": "site", "page": "/kontakty", "evidence": "exact quote"}, "flow": {"trigger": "...", "steps": ["...", "..."], "result": "..."}, "valueRank": 1, "valueReason": "..."}]}`;
 }
 
 export function planSystemPrompt(language: Language, kind: 'brief' | 'full'): string {
@@ -312,11 +323,14 @@ export function discoveryUserMessage(
   answers: readonly AnswerForPrompt[],
   /** Отраслевой плейбук (playbooks/): справка, не данные пользователя. */
   playbook: string | null = null,
+  /** Описание человека — для дословных цитат в «что теряется сейчас». */
+  description: string | null = null,
 ): string {
   const answered = answers
     .filter((item) => item.value)
     .map((item) => ({ question: item.question.text, answer: item.value }));
   const payload = JSON.stringify({
+    ...(description ? { description: description.slice(0, DESCRIPTION_IN_DISCOVERY) } : {}),
     context: { ...context, questions: undefined },
     answers: answered,
   });
