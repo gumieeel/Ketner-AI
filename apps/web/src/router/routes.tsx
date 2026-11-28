@@ -183,6 +183,8 @@ const appRoutes: RouteObject[] = [
       { path: 'payment-terms', lazy: lazyLegal('payment-terms') },
       { path: 'contacts', lazy: lazyPage(() => import('@/pages/contacts-page'), 'ContactsPage') },
       { path: 'about', lazy: lazyPage(() => import('@/pages/about-page'), 'AboutPage') },
+      // Кто читает сайты по просьбе их владельцев (User-Agent KetnerBot, discovery/site-crawl.ts).
+      { path: 'bot', lazy: lazyPage(() => import('@/pages/bot-page'), 'BotPage') },
       // Каталог моделей и тарифы чата — о закрытом чате (lib/product-switches.ts).
       {
         path: 'models',

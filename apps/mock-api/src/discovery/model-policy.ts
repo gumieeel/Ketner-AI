@@ -106,7 +106,7 @@ function systemChars(stage: StageName, language: Language, pilot: boolean): numb
 }
 
 function payloadChars(stage: StageName): number {
-  if (stage === 'context') return PAYLOAD_LIMITS.context;
+  if (stage === 'context') return PAYLOAD_LIMITS.context + PAYLOAD_LIMITS.site;
   if (stage === 'discovery') return PAYLOAD_LIMITS.discovery;
   return PAYLOAD_LIMITS.plan;
 }

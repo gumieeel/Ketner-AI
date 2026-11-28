@@ -63,6 +63,7 @@ import {
   type AccountTiers,
 } from '../billing/account-tiers.js';
 import { RECIPES } from '../discovery/analysis-map.js';
+import { siteReview } from '../discovery/site-facts.js';
 import { analysisV2PilotFor } from '../discovery/pilot.js';
 
 export interface AnalysesRouterDeps {
@@ -134,7 +135,21 @@ export function publicAnalysis(analysis: Analysis, opportunities: Opportunity[] 
     /** Прочитанный сайт: адрес и название, без сохранённого текста страницы. */
     source: analysis.source
       ? analysis.source.ok
-        ? { url: analysis.source.url, ok: true, title: analysis.source.title }
+        ? {
+            url: analysis.source.url,
+            ok: true,
+            title: analysis.source.title,
+            // Прочитанные страницы и «Разбор сайта» (правила сервера по фактам, site-facts.ts).
+            pages: (analysis.source.pages ?? []).map((page) => page.path),
+            review: analysis.source.pages
+              ? siteReview(
+                  analysis.source.facts ?? [],
+                  analysis.source.pages.map((page) => page.path),
+                  analysis.context?.profile?.industry ?? null,
+                  analysis.language,
+                ).map(({ rule, text, page }) => ({ rule, text, page }))
+              : [],
+          }
         : { url: analysis.source.url, ok: false, reason: analysis.source.reason }
       : null,
     saved: analysis.saved,
