@@ -17,6 +17,9 @@ import { DiscoveryService } from '../discovery/service.js';
 import { contextTemplate, discoveryTemplate } from '../discovery/templates.js';
 import type { DiscoveryStores } from '../discovery/runtime.js';
 import { MemoryPricingStore } from '../pricing/store.js';
+import { pricingServiceFor } from '../pricing/runtime.js';
+import { publicEstimate } from '../pricing/views.js';
+import { monthlyVolume } from '../discovery/profile.js';
 import type { MailMessage } from '../services/mailer.js';
 import { createConversationStore } from '../store/conversation-store.js';
 import { createSubscriptionStore } from '../store/subscription-store.js';
@@ -113,7 +116,32 @@ async function start() {
   const server: Server = app.listen(0);
   const base = `http://localhost:${(server.address() as { port: number }).port}`;
   rememberCodeMails(base, mails);
-  return { base, service, close: () => server.close() };
+  return { base, service, stores, close: () => server.close() };
+}
+
+/**
+ * Сметы, как их раньше видел клиент: разовые сметы из ответа анализа убраны (решение владельца от
+ * 27.11.2026), но сервер их по-прежнему считает и хранит — заявки, проверка администратором и
+ * калибровка работают на них. Тест берёт их напрямую у сервиса смет.
+ */
+async function clientEstimates(
+  app: Awaited<ReturnType<typeof start>>,
+  ownerId: string,
+  analysisId: string,
+) {
+  const found = await app.service.get(ownerId, analysisId);
+  assert.ok(found, 'анализ найден');
+  const pricing = pricingServiceFor(app.stores)!;
+  const rows = (await pricing.estimatesFor(found.analysis, found.opportunities)) ?? [];
+  const enabled = (await pricing.active()).config.enabled;
+  const context = {
+    catalogPositions: found.analysis.context?.profile?.catalogPositions ?? null,
+    monthlyRequests: monthlyVolume(found.analysis.context?.profile),
+  };
+  return {
+    enabled,
+    items: rows.map((row) => publicEstimate(row, enabled, context, found.analysis.language)),
+  };
 }
 
 async function call(
@@ -153,18 +181,22 @@ test('смета: от анализа до заявки, проверки адм
     const id = created.json.analysis.id as string;
     await app.service.whenIdle();
 
-    // 1. Гость видит сметы готового анализа: по каждой возможности и общую.
+    // 1. Сметы готового анализа считает сервер: по каждой возможности и общую. В ответ анализа
+    // они не попадают — там только статус каждой возможности.
     const view = await call(app.base, 'GET', `/api/analyses/${id}`, guest);
     assert.equal(view.status, 200);
     assert.equal(view.json.analysis.status, 'ready');
-    const estimates = view.json.estimates;
-    assert.ok(estimates, 'сметы посчитаны');
+    assert.equal('estimates' in view.json, false, 'разовых смет в ответе анализа нет');
+    assert.doesNotMatch(view.text, /priceKzt|₸/);
+    const estimates = await clientEstimates(app, guestId, id);
+    assert.ok(estimates.items.length > 0, 'сметы посчитаны');
     assert.equal(estimates.enabled, true);
     const items = estimates.items as Array<Record<string, unknown> & { scopeKey: string }>;
     const opportunities = view.json.analysis.opportunities as Array<{
       id: string;
       title: string;
       workItems: unknown[];
+      launch: string;
     }>;
     assert.equal(items.filter((item) => item.scope === 'opportunity').length, opportunities.length);
     const combined = items.find((item) => item.scopeKey === 'combined') as unknown as {
@@ -188,6 +220,12 @@ test('смета: от анализа до заявки, проверки адм
     assert.equal(own.delivery.tier?.name, 'Start');
     const crm = byTitle('CRM');
     assert.equal(crm.delivery.kind, 'team');
+    // Статус в отчёте — из тех же правил: команда — «С командой Ketner», сам — без готовой
+    // автоматизации «скоро», запланированное — «скоро».
+    const launch = (part: string) => opportunities.find((o) => o.title.includes(part))!.launch;
+    assert.equal(launch('CRM'), 'team');
+    assert.equal(launch('письма'), 'soon');
+    assert.equal(view.json.paidTier, false, 'у гостя тарифа нет');
     assert.equal(crm.delivery.paidTierRequired, true);
     // Один внешний сервис помещается в Start (решение владельца 23.11.2026).
     assert.equal(crm.delivery.tier?.name, 'Start', 'один внешний сервис — Start');
@@ -227,9 +265,9 @@ test('смета: от анализа до заявки, проверки адм
       assert.equal(view.text.includes(secret), false, secret);
     }
     // Повторное чтение — те же сметы (без пересчёта).
-    const again = await call(app.base, 'GET', `/api/analyses/${id}`, guest);
+    const again = await clientEstimates(app, guestId, id);
     assert.deepEqual(
-      again.json.estimates.items.map((item: { id: string }) => item.id),
+      again.items.map((item) => item.id),
       items.map((item) => item.id),
     );
 
@@ -353,11 +391,10 @@ test('смета: от анализа до заявки, проверки адм
     // Сметы клиента не меняются от новой ставки: ни в заявке, ни в анализе.
     const kept = await call(app.base, 'GET', `/api/requests/${requestId}`, owner);
     assert.deepEqual(kept.json.request.preliminary.priceKzt, combined.priceKzt);
-    const keptView = await call(app.base, 'GET', `/api/analyses/${id}`, owner);
+    const ownerId = (await call(app.base, 'GET', '/api/auth/me', owner)).json.user.id as string;
+    const keptView = await clientEstimates(app, ownerId, id);
     assert.deepEqual(
-      keptView.json.estimates.items.find(
-        (item: { scopeKey: string }) => item.scopeKey === 'combined',
-      ).priceKzt,
+      keptView.items.find((item) => item.scopeKey === 'combined')!.priceKzt,
       combined.priceKzt,
     );
 
@@ -373,10 +410,11 @@ test('смета: от анализа до заявки, проверки адм
     assert.equal(profile.status, 200, profile.text);
     assert.equal(profile.json.analysis.context.profile.city, 'Караганда');
     assert.equal(profile.json.analysis.context.profile.edited, true);
-    const recalculated = profile.json.estimates.items.find(
-      (item: { scopeKey: string }) => item.scopeKey === 'combined',
-    );
-    assert.ok(recalculated.priceKzt.expected > combined.priceKzt.expected);
+    assert.equal('estimates' in profile.json, false);
+    const recalculated = (await clientEstimates(app, ownerId, id)).items.find(
+      (item) => item.scopeKey === 'combined',
+    )!;
+    assert.ok(recalculated.priceKzt!.expected > combined.priceKzt.expected);
     assert.notEqual(recalculated.id, (combined as unknown as { id: string }).id);
     assert.equal(recalculated.monthly.usage.monthlyRequests, 900);
     assert.equal(recalculated.monthly.usage.status, 'forecast');

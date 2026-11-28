@@ -13,6 +13,7 @@ import { MemoryDiscoveryStore } from './store.js';
 import { BuildAllowance } from '../billing/build-allowance.js';
 import { MemoryCounterStore } from '../billing/cost-counters.js';
 import { setProductSwitchForTests } from '../product-switches.js';
+import { setAnalysisV2PilotForTests } from './pilot.js';
 
 // Возможности «API» и «GitHub» живут в закрытых разделах (product-switches.ts); здесь проверяется
 // механика «нужна настройка», поэтому разделы открыты для этого файла.
@@ -1220,4 +1221,175 @@ test('поиск возможностей получает отраслевой 
     /«B2B-услуги и агентства»/,
   );
   assert.match(await run({}), /«Малый бизнес»/);
+});
+
+test('пилот анализа v2: поиск возможностей на Sonnet без подмены и с резервом его потолка; остальные — как раньше', async (t) => {
+  t.after(() => setAnalysisV2PilotForTests(null));
+  setAnalysisV2PilotForTests(['pilot-owner']);
+  const pilotCap = stagePolicy('free', 'discovery', 'ru', undefined, { pilot: true }).capUsd;
+  const currentCap = stagePolicy('free', 'discovery', 'ru').capUsd;
+
+  const run = async (caller: DiscoveryCaller, script: Script = {}) => {
+    const harness = setup({ script: { context: CONTEXT_NO_QUESTIONS, ...script } });
+    const created = await create(harness.service, caller, { text: LONG });
+    assert.equal(created.ok, true);
+    if (!created.ok) throw new Error('not created');
+    await harness.service.whenIdle();
+    const discovery = harness.requests.filter((r) => r.task?.id.split(':')[1] === 'discovery');
+    const context = harness.requests.find((r) => r.task?.id.split(':')[1] === 'context');
+    const reserved = (await harness.budget.forAnalysis(created.analysis.id)).find(
+      (item) => item.stage === 'discovery',
+    );
+    const view = await harness.service.get(caller.userId, created.analysis.id);
+    return { discovery, context, reserved, view };
+  };
+
+  // Пилот: Sonnet, effort medium, strictModel, промпт v2; разбор — прежняя модель.
+  const pilot = await run(account('pilot-owner', { plan: 'free' }));
+  assert.equal(pilot.view?.analysis.status, 'ready');
+  assert.deepEqual(
+    pilot.discovery.map((r) => [r.modelId, r.strictModel, r.task?.reasoningEffort]),
+    [['claude-sonnet-5.5', true, 'medium']],
+  );
+  assert.match(pilot.discovery[0]!.task?.systemPrompt ?? '', /по ценности для этого бизнеса/);
+  assert.equal(pilot.context?.modelId, 'ketner-mini');
+  assert.equal(pilot.reserved?.capUsd, pilotCap);
+  assert.equal(pilot.view?.analysis.stages.discovery?.model?.id, 'claude-sonnet-5.5');
+
+  // Не в пилоте: всё как раньше.
+  const other = await run(account('other-owner', { plan: 'free' }));
+  assert.deepEqual(
+    other.discovery.map((r) => [r.modelId, r.task?.reasoningEffort]),
+    [['ketner-mini', 'low']],
+  );
+  assert.match(other.discovery[0]!.task?.systemPrompt ?? '', /простых в старте/);
+  assert.equal(other.reserved?.capUsd, currentCap);
+
+  // Sonnet недоступен: этап не удался, другой моделью он не вызывается.
+  const failed = await run(account('pilot-owner', { plan: 'free' }), { failDiscovery: 5 });
+  assert.equal(failed.view?.analysis.status, 'failed');
+  assert.ok(failed.discovery.length >= 1);
+  assert.ok(
+    failed.discovery.every((r) => r.modelId === 'claude-sonnet-5.5' && r.strictModel === true),
+    JSON.stringify(failed.discovery.map((r) => r.modelId)),
+  );
+});
+
+test('пилот: ценная автоматизация, которой Ketner пока не умеет, — честная возможность без рецепта и запуска', async (t) => {
+  t.after(() => setAnalysisV2PilotForTests(null));
+  setAnalysisV2PilotForTests(['pilot-owner']);
+  const soon = JSON.parse(DISCOVERY) as { opportunities: Array<Record<string, unknown>> };
+  soon.opportunities.push({
+    title: 'Заявки сразу в CRM',
+    area: 'sales',
+    // Модель ошибочно приписала готовую автоматизацию — сервер её снимает.
+    recipe: 'customer_bot',
+    problem: 'Заявки теряются между мессенджером и CRM',
+    solution: 'Заявка из WhatsApp → агент уточняет бюджет → сделка в amoCRM',
+    requires: ['crm', 'messengers', 'text_generation'],
+    effort: 'high',
+    solutionType: 'workflow',
+    impact: { taskId: 't1', automationShare: 'high', benefit: 'Ни одна заявка не теряется' },
+  });
+  const { service } = setup({
+    script: { context: CONTEXT_NO_QUESTIONS, discovery: JSON.stringify(soon) },
+  });
+  const caller = account('pilot-owner', { plan: 'free' });
+  const created = await create(service, caller, { text: LONG });
+  if (!created.ok) return assert.fail('не создан');
+  await service.whenIdle();
+  const view = await service.get(caller.userId, created.analysis.id);
+  const crm = view?.opportunities.find((item) => item.title === 'Заявки сразу в CRM');
+  assert.ok(crm, 'возможность «скоро» осталась в отчёте');
+  assert.equal(crm.feasibilityStatus, 'not_supported');
+  assert.equal(crm.recipe, null, 'без рецепта — без кнопки запуска');
+});
+
+test('проверки сервера после поиска: каналы клиента, которых нет, и личный помощник при закрытом чате', async () => {
+  const base = {
+    area: 'clients',
+    problem: 'Клиенты ждут ответа',
+    effort: 'low',
+    impact: { taskId: 't1', automationShare: 'medium', benefit: 'Быстрее' },
+  };
+  const discovery = JSON.stringify({
+    summary: 'Проверка',
+    opportunities: [
+      {
+        ...base,
+        title: 'ИИ-агент на сайте и в Telegram',
+        recipe: 'customer_bot',
+        solution: 'Агент отвечает клиентам на сайте и в Telegram.',
+        requires: ['customer_bot_page', 'text_generation'],
+      },
+      {
+        ...base,
+        title: 'Ответы клиентам в Instagram',
+        recipe: null,
+        solution: 'Агент отвечает на вопросы в директе Instagram.',
+        requires: ['text_generation'],
+      },
+      {
+        ...base,
+        title: 'Заявки в таблицу',
+        recipe: null,
+        solution: 'Заявка с формы попадает в таблицу, менеджер получает уведомление в Telegram.',
+        requires: ['spreadsheets_sync'],
+      },
+      {
+        ...base,
+        area: 'content',
+        title: 'Посты для Telegram-канала компании',
+        recipe: 'personal_assistant',
+        solution: 'Агент готовит посты и публикует их по расписанию.',
+        requires: ['personal_assistant'],
+      },
+      {
+        ...base,
+        area: 'documents',
+        title: 'Черновики коммерческих предложений',
+        recipe: 'personal_assistant',
+        solution: 'ИИ пишет черновик КП по короткому заданию.',
+        requires: ['personal_assistant'],
+      },
+    ],
+  });
+  const { service } = setup({ script: { context: CONTEXT_NO_QUESTIONS, discovery } });
+  const caller = guest();
+  const created = await create(service, caller, { text: LONG });
+  if (!created.ok) return assert.fail('не создан');
+  await service.whenIdle();
+  const view = await service.get(caller.userId, created.analysis.id);
+  const by = (part: string) => view!.opportunities.find((item) => item.title.includes(part))!;
+
+  // Карточка «сейчас»: канал убран из текста, готовая автоматизация осталась.
+  const agent = by('ИИ-агент на сайте');
+  assert.equal(agent.title, 'ИИ-агент на сайте');
+  assert.equal(agent.solution, 'Агент отвечает клиентам на сайте.');
+  assert.equal(agent.recipe, 'customer_bot');
+  assert.ok(!agent.requires.includes('messengers'));
+  // Остальные: нужен канал мессенджеров — «пока не поддерживается».
+  const instagram = by('Instagram');
+  assert.ok(instagram.requires.includes('messengers'));
+  assert.equal(instagram.feasibilityStatus, 'not_supported');
+  // Уведомление менеджеру в Telegram — не канал клиента.
+  assert.ok(!by('Заявки в таблицу').requires.includes('messengers'));
+  // Личный помощник при закрытом чате не называется недостающим.
+  const posts = by('Посты');
+  assert.ok(!posts.requires.includes('personal_assistant'));
+  assert.ok(posts.requires.includes('auto_posting'));
+  assert.deepEqual(
+    posts.feasibility.blockers.map((item) => item.label),
+    ['Посты по расписанию'],
+  );
+  assert.equal(posts.recipe, null);
+  const drafts = by('Черновики');
+  assert.deepEqual(drafts.requires, ['text_generation']);
+  assert.equal(drafts.recipe, null);
+  for (const item of view!.opportunities) {
+    assert.ok(
+      !item.feasibility.blockers.some((blocker) => /Помощник вам/.test(blocker.label)),
+      item.title,
+    );
+  }
 });

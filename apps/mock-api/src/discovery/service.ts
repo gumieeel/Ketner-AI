@@ -32,7 +32,8 @@ import {
 } from './budget.js';
 import { acceptedRecipe, normalizeCoverage } from './analysis-map.js';
 import { assessFeasibility, feasibilityRank, type UserCapabilities } from './feasibility.js';
-import { readSite, type SiteResult } from './site-reader.js';
+import { type SiteResult } from './site-reader.js';
+import { crawlSite, type CrawlResult } from './site-crawl.js';
 import { findSiteUrl } from './site-url.js';
 import { estimateImpact, verifyTaskNumbers } from './impact.js';
 import {
@@ -88,6 +89,10 @@ import type { DiscoveryStore } from './store.js';
 import { contextTemplate, discoveryTemplate, planTemplate } from './templates.js';
 import { gateQuestions, needsKeyAnswer } from './key-facts.js';
 import { playbookFor, playbookForPrompt } from './playbooks/index.js';
+import { customerChannelsIn, withoutCustomerChannels } from './channel-guard.js';
+import { productSwitch } from '../product-switches.js';
+import type { CapabilityId } from './capabilities.js';
+import { analysisV2PilotFor } from './pilot.js';
 import type {
   Analysis,
   AnswerRecord,
@@ -126,7 +131,8 @@ export interface DiscoveryServiceDeps {
   /** Таймаут ответа провайдера, мс. */
   providerTimeoutMs?: number;
   /** Чтение сайта по ссылке из описания (по умолчанию — настоящий запрос с защитой от SSRF). */
-  readSite?: (url: string) => Promise<SiteResult>;
+  /** Чтение сайта (по умолчанию — до 10 страниц, site-crawl.ts); в тестах — подмена. */
+  readSite?: (url: string) => Promise<SiteResult | CrawlResult>;
   /**
    * Каталог работ по внедрению для промпта поиска возможностей — из действующей версии настроек
    * смет (pricing/service.ts). Нет — каталог по умолчанию.
@@ -190,8 +196,13 @@ export class DiscoveryService {
     return nextBudgetReset(this.now(), this.deps.budgetTimeZone).toISOString();
   }
 
-  quote(mode: AnalysisMode, language: Language): CostEstimate {
-    return estimateStages(mode, ANALYSIS_STAGES, language, this.registry);
+  quote(mode: AnalysisMode, language: Language, ownerId?: string): CostEstimate {
+    return estimateStages(mode, ANALYSIS_STAGES, language, this.registry, this.pilotOf(ownerId));
+  }
+
+  /** Пилот анализа v2: поиск возможностей на Sonnet и промпт v2 (product-switches.ts). */
+  private pilotOf(ownerId: string | null | undefined): { pilot: boolean } {
+    return { pilot: analysisV2PilotFor(ownerId) };
   }
 
   /** Модели и цены для страницы анализа: что будет, если запустить сейчас. */
@@ -207,7 +218,7 @@ export class DiscoveryService {
           stagePolicy('paid', 'context', language, this.registry).modelId,
           this.registry,
         ),
-        ...this.quote('paid', language),
+        ...this.quote('paid', language, caller.userId),
         loginRequired: caller.guest,
       },
       deep: {
@@ -215,9 +226,10 @@ export class DiscoveryService {
           stagePolicy('deep', 'context', language, this.registry).modelId,
           this.registry,
         ),
-        ...this.quote('deep', language),
+        ...this.quote('deep', language, caller.userId),
         loginRequired: caller.guest,
-        confirmationRequired: this.quote('deep', language).maxCredits > CONFIRM_ABOVE_CREDITS,
+        confirmationRequired:
+          this.quote('deep', language, caller.userId).maxCredits > CONFIRM_ABOVE_CREDITS,
       },
     };
   }
@@ -247,7 +259,10 @@ export class DiscoveryService {
       if (fromIp >= FREE_PER_IP_PER_DAY) return { ok: false, reason: 'ip_limit' };
     }
     const budget = await this.deps.budget.day(day);
-    const need = this.freeReservationCaps('ru').reduce((sum, item) => sum + item.capUsd, 0);
+    const need = this.freeReservationCaps('ru', caller.userId).reduce(
+      (sum, item) => sum + item.capUsd,
+      0,
+    );
     // Суток в базе ещё нет — бюджет не тронут, но и он может быть меньше одного сценария.
     const used = budget ? budget.spentUsd + budget.reservedUsd : 0;
     if (used + need > this.deps.freeDailyUsd) {
@@ -257,10 +272,15 @@ export class DiscoveryService {
   }
 
   /** Потолки этапов бесплатного сценария: разбор, поиск возможностей и краткий план. */
-  private freeReservationCaps(language: Language): Array<{ stage: StageName; capUsd: number }> {
+  private freeReservationCaps(
+    language: Language,
+    ownerId: string,
+  ): Array<{ stage: StageName; capUsd: number }> {
+    // Пилот: резервируется потолок Sonnet на поиске возможностей.
+    const options = this.pilotOf(ownerId);
     return (['context', 'discovery', 'plan'] as const).map((stage) => ({
       stage,
-      capUsd: stagePolicy('free', stage, language, this.registry).capUsd,
+      capUsd: stagePolicy('free', stage, language, this.registry, options).capUsd,
     }));
   }
 
@@ -269,7 +289,7 @@ export class DiscoveryService {
     caller: DiscoveryCaller,
     language: Language,
   ): ServiceError {
-    const paid = this.quote('paid', language);
+    const paid = this.quote('paid', language, caller.userId);
     const messages: Record<typeof reason, string> = {
       daily_limit: text(
         language,
@@ -354,7 +374,7 @@ export class DiscoveryService {
     if (mode === 'free') {
       const availability = await this.freeAvailability(caller, input.email);
       if (!availability.ok) return this.freeUnavailable(availability.reason, caller, language);
-      reservations = this.freeReservationCaps(language).map((item) => ({
+      reservations = this.freeReservationCaps(language, caller.userId).map((item) => ({
         id: `${id}:${item.stage}:1`,
         analysisId: id,
         stage: item.stage,
@@ -447,7 +467,13 @@ export class DiscoveryService {
         ),
       };
     }
-    const estimate = estimateStages(mode, stages, language, this.registry);
+    const estimate = estimateStages(
+      mode,
+      stages,
+      language,
+      this.registry,
+      this.pilotOf(caller.userId),
+    );
     // Платный анализ платит бесплатный лимит: до запуска — проверка, что на анализ его хватает.
     const allowance = await this.allowance.status(caller.userId).catch(() => null);
     const left = (scope: { spentCredits: number; limitCredits: number } | null | undefined) =>
@@ -587,10 +613,17 @@ export class DiscoveryService {
 
   /** Цена повторного поиска возможностей после изменения ответов (показывается до запуска). */
   rerunQuote(analysis: Analysis, caller: DiscoveryCaller) {
-    const estimate = estimateStages(analysis.mode, ['discovery'], analysis.language, this.registry);
+    const options = this.pilotOf(analysis.ownerId);
+    const estimate = estimateStages(
+      analysis.mode,
+      ['discovery'],
+      analysis.language,
+      this.registry,
+      options,
+    );
     return {
       model: realModelName(
-        stagePolicy(analysis.mode, 'discovery', analysis.language, this.registry).modelId,
+        stagePolicy(analysis.mode, 'discovery', analysis.language, this.registry, options).modelId,
         this.registry,
       ),
       typicalCredits: estimate.typicalCredits,
@@ -605,12 +638,19 @@ export class DiscoveryService {
     if (analysis.status !== 'failed' || !stage) return null;
     const run = analysis.stages[stage] as StageRun;
     if (analysis.mode === 'free' && run.billing !== 'user') return { stage, sponsored: true };
-    const estimate = estimateStages(analysis.mode, [stage], analysis.language, this.registry);
+    const options = this.pilotOf(analysis.ownerId);
+    const estimate = estimateStages(
+      analysis.mode,
+      [stage],
+      analysis.language,
+      this.registry,
+      options,
+    );
     return {
       stage,
       sponsored: false,
       model: realModelName(
-        stagePolicy(analysis.mode, stage, analysis.language, this.registry).modelId,
+        stagePolicy(analysis.mode, stage, analysis.language, this.registry, options).modelId,
         this.registry,
       ),
       typicalCredits: estimate.typicalCredits,
@@ -710,7 +750,13 @@ export class DiscoveryService {
             id: discoveryReservation,
             analysisId: id,
             stage: 'discovery',
-            capUsd: stagePolicy('free', 'discovery', current.language, this.registry).capUsd,
+            capUsd: stagePolicy(
+              'free',
+              'discovery',
+              current.language,
+              this.registry,
+              this.pilotOf(current.ownerId),
+            ).capUsd,
             expiresAt: new Date(this.now().getTime() + RUNNING_MS).toISOString(),
           },
         ]);
@@ -848,7 +894,13 @@ export class DiscoveryService {
     const sponsored = current.mode === 'free' && previous.billing !== 'user';
 
     if (sponsored) {
-      const capUsd = stagePolicy('free', stage, current.language, this.registry).capUsd;
+      const capUsd = stagePolicy(
+        'free',
+        stage,
+        current.language,
+        this.registry,
+        this.pilotOf(current.ownerId),
+      ).capUsd;
       reservationId = `${id}:${stage}:${attemptNo}`;
       const reserved = await this.deps.budget.reserve(this.today(), this.deps.freeDailyUsd, [
         {
@@ -1554,7 +1606,8 @@ export class DiscoveryService {
         new Date(this.now().getTime() + RUNNING_MS).toISOString(),
       );
     }
-    const policy = stagePolicy(started.mode, stage, started.language, this.registry);
+    const pilot = this.pilotOf(started.ownerId);
+    const policy = stagePolicy(started.mode, stage, started.language, this.registry, pilot);
     const common = {
       gateway: this.deps.gateway,
       caller,
@@ -1628,6 +1681,7 @@ export class DiscoveryService {
           this.deps.workCatalog
             ? await this.deps.workCatalog(started.language).catch(() => undefined)
             : undefined,
+          pilot.pilot ? 'pilot' : 'current',
         ),
         userMessage: discoveryUserMessage(
           started.language,
@@ -1691,21 +1745,69 @@ export class DiscoveryService {
     ownerId: string,
     id: string,
     analysis: Analysis,
-  ): Promise<{ url: string; title: string; description: string; text: string } | null> {
+  ): Promise<Extract<SiteSource, { ok: true }> | null> {
     if (analysis.source) return analysis.source.ok ? analysis.source : null;
     const url = findSiteUrl(analysis.inputText);
     if (!url) return null;
-    const result = await (this.deps.readSite ?? readSite)(url).catch((): SiteResult => ({
+    const result = await (this.deps.readSite ?? crawlSite)(url).catch((): SiteResult => ({
       ok: false,
       url,
       reason: 'unreachable',
     }));
     const fetchedAt = this.now().toISOString();
     const source: SiteSource = result.ok
-      ? { ...result, fetchedAt }
+      ? {
+          url: result.url,
+          ok: true,
+          title: result.title,
+          description: result.description,
+          text: result.text,
+          fetchedAt,
+          ...('pages' in result ? { pages: result.pages, facts: result.facts } : {}),
+        }
       : { url: result.url, ok: false, reason: result.reason, fetchedAt };
     await this.mutate(ownerId, id, (current) => ({ ...current, source }));
-    return result.ok ? result : null;
+    return source.ok ? source : null;
+  }
+
+  /**
+   * Проверки сервера над возможностью от модели (анализ 28.11.2026):
+   * - личный помощник живёт в чате: пока чат закрыт, он не называется недостающим — у постов это
+   *   «Публикация постов по расписанию» (`auto_posting`, «скоро»), у остального — тексты ИИ; рецепт
+   *   помощника при закрытом чате недоступен (analysis-map.ts), карточка — «скоро»;
+   * - канал клиента, которого у Ketner нет (channel-guard.ts): у карточки с готовой автоматизацией
+   *   он убирается из текста, у остальных в требования добавляется `messengers` — «скоро».
+   */
+  private guardOpportunity(
+    item: DiscoveryOutput['opportunities'][number],
+    user: UserCapabilities,
+    language: Language,
+  ): DiscoveryOutput['opportunities'][number] {
+    let next = item;
+    if (!productSwitch('chat') && next.requires.includes('personal_assistant')) {
+      const posts = /пост|публикац|контент|рассылк|post|publish|content|newsletter/i.test(
+        `${next.title} ${next.solution}`,
+      );
+      const rest = next.requires.filter((id) => id !== 'personal_assistant');
+      const added: CapabilityId = posts ? 'auto_posting' : 'text_generation';
+      next = { ...next, requires: rest.includes(added) ? rest : [...rest, added] };
+    }
+    const channels = customerChannelsIn(next.title, next.problem, next.solution);
+    if (channels.length === 0 || next.requires.includes('messengers')) return next;
+    const now = acceptedRecipe(
+      next.recipe,
+      assessFeasibility(next.requires, user, language, next.otherRequirement).status,
+      next.requires,
+    );
+    if (now) {
+      return {
+        ...next,
+        title: withoutCustomerChannels(next.title),
+        problem: withoutCustomerChannels(next.problem),
+        solution: withoutCustomerChannels(next.solution),
+      };
+    }
+    return { ...next, requires: [...next.requires, 'messengers'] };
   }
 
   private buildOpportunities(
@@ -1734,14 +1836,10 @@ export class DiscoveryService {
       channels.length > 0 && !offersBot(output.opportunities)
         ? customerBotOffer(analysis.language, channels)
         : null;
-    // Возможность с рецептом личного помощника требует его возможность: пока чат закрыт, она
-    // «пока нет», а не «можно сделать сейчас» (capabilities.ts, personal_assistant).
-    const drafts = (serverBot ? [...output.opportunities, serverBot] : output.opportunities).map(
-      (item) =>
-        item.recipe === 'personal_assistant' && !item.requires.includes('personal_assistant')
-          ? { ...item, requires: [...item.requires, 'personal_assistant' as const] }
-          : item,
-    );
+    const drafts = [
+      ...output.opportunities.map((item) => this.guardOpportunity(item, user, analysis.language)),
+      ...(serverBot ? [serverBot] : []),
+    ];
     const built = drafts.map((item, position): Opportunity => {
       const feasibility = assessFeasibility(
         item.requires,

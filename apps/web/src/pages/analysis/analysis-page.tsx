@@ -90,7 +90,7 @@ function AnalysisScreen({ id }: { id: string }) {
         <Report
           analysis={analysis}
           plans={load.plans}
-          estimates={load.estimates ?? null}
+          paidTier={load.paidTier ?? false}
           onChanged={refresh}
         >
           <details className="rounded-xl border border-stroke bg-surface px-5 py-3">
