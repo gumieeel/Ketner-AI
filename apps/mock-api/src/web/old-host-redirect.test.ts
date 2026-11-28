@@ -84,3 +84,29 @@ test('промежуточный слой сам по себе: цель — а�
   assert.deepEqual(calls, [[301, 'https://ketner.org/x?y=1']]);
   assert.equal(passed, 2);
 });
+
+test('защита от петли: адрес сайта указывает на старый хост или не разбирается — переадресации нет', () => {
+  for (const target of [
+    'https://ketner-ai.onrender.com',
+    'https://KETNER-AI.onrender.com/',
+    'http://ketner-ai.onrender.com:8080',
+    'not a url',
+  ]) {
+    const calls: Array<[number, string]> = [];
+    let passed = 0;
+    oldHostRedirect(() => target)(
+      {
+        method: 'GET',
+        path: '/pricing',
+        originalUrl: '/pricing',
+        headers: { host: 'ketner-ai.onrender.com' },
+      } as never,
+      { redirect: (status: number, url: string) => calls.push([status, url]) } as never,
+      () => {
+        passed += 1;
+      },
+    );
+    assert.deepEqual(calls, [], target);
+    assert.equal(passed, 1, target);
+  }
+});

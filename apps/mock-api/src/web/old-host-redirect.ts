@@ -14,6 +14,9 @@
  * - `/assets/*` — файлы сборки: модульные скрипты с другого адреса требуют CORS, а открытые
  *   вкладки старой версии должны догрузиться.
  * Всё остальное (POST, PUT, DELETE и т. д.) не перенаправляется.
+ *
+ * Защита от петли: адрес сайта (`siteUrl()`) берётся из SITE_URL или WEB_APP_URL, по умолчанию
+ * https://ketner.org. Если его когда-нибудь настроят на старый хост, переадресация выключается.
  */
 
 import type { NextFunction, Request, Response } from 'express';
@@ -36,6 +39,15 @@ export function oldHostRedirect(target: () => string) {
     if (!OLD_HOSTS.includes(host)) return next();
     if (EXCLUDED.some((pattern) => pattern.test(request.path))) return next();
     const base = target().replace(/\/+$/, '');
+    // Защита от петли: если адрес сайта по ошибке настроен на старый хост (SITE_URL или
+    // WEB_APP_URL на Render) или не разбирается, переадресации нет — страница отдаётся как есть.
+    let targetHost: string;
+    try {
+      targetHost = new URL(base).hostname.toLowerCase();
+    } catch {
+      return next();
+    }
+    if (targetHost === host || OLD_HOSTS.includes(targetHost)) return next();
     response.redirect(301, `${base}${request.originalUrl}`);
   };
 }
