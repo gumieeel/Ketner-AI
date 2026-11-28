@@ -310,6 +310,12 @@ function SummaryCard({ analysis }: { analysis: AnalysisView }) {
           <p className="mt-2 text-[15px] leading-6 text-muted">
             {analysis.summary ?? analysis.context?.summary ?? ''}
           </p>
+          {/* Пилот анализа v2: владельцу видно, какая модель искала возможности. */}
+          {analysis.pilot && analysis.stages.discovery?.model ? (
+            <p className="mt-2 text-[13px] text-subtle" data-testid="pilot-model">
+              {t('analysis.result.pilotModel', { model: analysis.stages.discovery.model.name })}
+            </p>
+          ) : null}
         </div>
       </div>
       <div className="flex gap-3 border-stroke max-sm:border-t max-sm:pt-4 sm:min-w-[13rem] sm:border-l sm:pl-6">

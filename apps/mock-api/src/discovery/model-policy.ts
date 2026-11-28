@@ -49,6 +49,22 @@ const EFFORT: Readonly<Record<AnalysisMode, ReasoningEffort>> = {
   deep: 'medium',
 };
 
+/**
+ * Пилот анализа v2 (product-switches.ts, `ANALYSIS_V2_PILOT_ACCOUNTS`): поиск возможностей — Claude
+ * Sonnet 5.5, effort medium, при любом режиме. Остальные этапы — как у режима. Подмены модели нет:
+ * шлюз вызывается со `strictModel`.
+ */
+export const PILOT_DISCOVERY = {
+  modelId: 'claude-sonnet-5.5',
+  maxOutputTokens: 9_500,
+  reasoningEffort: 'medium' as ReasoningEffort,
+} as const;
+
+export interface PolicyOptions {
+  /** Аккаунт в пилоте анализа v2. */
+  pilot?: boolean;
+}
+
 /** Попыток на этап: первая и один повтор при ответе, не прошедшем схему. */
 export const STAGE_ATTEMPTS = 2;
 
@@ -77,11 +93,14 @@ export interface StagePolicy {
   typicalUsd: number;
 }
 
-function systemChars(stage: StageName, language: Language): number {
+function systemChars(stage: StageName, language: Language, pilot: boolean): number {
   if (stage === 'context') return contextSystemPrompt(language).length;
   // Каталог работ меняет администратор: для потолка цены берём его наибольший допустимый размер.
   if (stage === 'discovery')
-    return discoverySystemPrompt(language, '').length + CATALOG_PROMPT_MAX_CHARS;
+    return (
+      discoverySystemPrompt(language, '', pilot ? 'pilot' : 'current').length +
+      CATALOG_PROMPT_MAX_CHARS
+    );
   // Бесплатный план — краткий, за кредиты — полный (промпт чуть длиннее, считаем по нему).
   return planSystemPrompt(language, 'full').length;
 }
@@ -109,12 +128,17 @@ export function stagePolicy(
   stage: StageName,
   language: Language,
   registry: ModelRegistry = modelRegistry,
+  options: PolicyOptions = {},
 ): StagePolicy {
-  const modelId = MODEL_BY_MODE[mode];
+  const pilot = Boolean(options.pilot) && stage === 'discovery';
+  const modelId = pilot ? PILOT_DISCOVERY.modelId : MODEL_BY_MODE[mode];
   const model = registry.resolve(modelId);
-  const maxOutputTokens = Math.min(OUTPUT_TOKENS[mode][stage], model.maxOutputTokens);
+  const maxOutputTokens = Math.min(
+    pilot ? PILOT_DISCOVERY.maxOutputTokens : OUTPUT_TOKENS[mode][stage],
+    model.maxOutputTokens,
+  );
   // Служебные строки шлюза (имя модели, обёртка) — небольшой запас сверху.
-  const firstInput = tokensOf(systemChars(stage, language) + payloadChars(stage) + 600);
+  const firstInput = tokensOf(systemChars(stage, language, pilot) + payloadChars(stage) + 600);
   const retryInput = firstInput + tokensOf(REPAIR_ECHO_CHARS + 600);
   const capUsd =
     priceUsd(model.pricing, firstInput, maxOutputTokens) +
@@ -126,7 +150,7 @@ export function stagePolicy(
   return {
     modelId,
     maxOutputTokens,
-    reasoningEffort: EFFORT[mode],
+    reasoningEffort: pilot ? PILOT_DISCOVERY.reasoningEffort : EFFORT[mode],
     capUsd: round6(capUsd),
     typicalUsd: round6(typicalUsd),
   };
@@ -179,11 +203,12 @@ export function estimateStages(
   stages: readonly StageName[],
   language: Language,
   registry: ModelRegistry = modelRegistry,
+  options: PolicyOptions = {},
 ): CostEstimate {
   let typicalUsd = 0;
   let maxUsd = 0;
   for (const stage of stages) {
-    const policy = stagePolicy(mode, stage, language, registry);
+    const policy = stagePolicy(mode, stage, language, registry, options);
     typicalUsd += policy.typicalUsd;
     maxUsd += policy.capUsd;
   }

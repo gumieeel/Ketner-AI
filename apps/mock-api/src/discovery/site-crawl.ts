@@ -289,13 +289,22 @@ export async function crawlSite(
     bytes += fetched.body.length;
     return sitemapLocations(decode(fetched.body, fetched.contentType));
   };
-  const maps =
-    robots.sitemaps.length > 0 ? robots.sitemaps : [new URL('/sitemap.xml', homeUrl).toString()];
+  // Карты из robots.txt и вложенные карты — только того же сайта (хост или его вариант с www.),
+  // как страницы; карты на другом хосте не запрашиваются. Своих не осталось — /sitemap.xml.
+  const sameSiteMap = (address: string) => {
+    try {
+      return onSite(new URL(address, homeUrl));
+    } catch {
+      return false;
+    }
+  };
+  const listed = robots.sitemaps.filter(sameSiteMap);
+  const maps = listed.length > 0 ? listed : [new URL('/sitemap.xml', homeUrl).toString()];
   for (const map of maps.slice(0, 3)) {
-    const found = await readSitemap(map);
+    const found = await readSitemap(new URL(map, homeUrl).toString());
     sitemapUrls.push(...found.pages);
-    for (const child of found.children.slice(0, 3))
-      sitemapUrls.push(...(await readSitemap(child)).pages);
+    for (const child of found.children.filter(sameSiteMap).slice(0, 3))
+      sitemapUrls.push(...(await readSitemap(new URL(child, homeUrl).toString())).pages);
     if (sitemapUrls.length >= CRAWL_LIMITS.sitemapUrls) break;
   }
 

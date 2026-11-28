@@ -188,6 +188,46 @@ test('без карты сайта — ссылки навигации; Disallow
   assert.deepEqual(closed.requests, ['/robots.txt'], 'главная не запрашивается');
 });
 
+test('карты сайта из robots.txt на другом хосте не запрашиваются; своих нет — /sitemap.xml', async (t) => {
+  const site = await serve((base) => {
+    const other = base.replace('127.0.0.1', 'localhost');
+    return {
+      '/robots.txt': {
+        type: 'text/plain',
+        body: `User-agent: *\nDisallow:\nSitemap: ${other}/foreign-sitemap.xml\nSitemap: https://elsewhere.example/sitemap.xml`,
+      },
+      '/foreign-sitemap.xml': {
+        type: 'application/xml',
+        body: `<urlset><url><loc>${other}/foreign-page</loc></url></urlset>`,
+      },
+      '/sitemap.xml': {
+        type: 'application/xml',
+        body: `<sitemapindex><sitemap><loc>${other}/foreign-child.xml</loc></sitemap><sitemap><loc>${base}/child.xml</loc></sitemap></sitemapindex>`,
+      },
+      '/child.xml': {
+        type: 'application/xml',
+        body: `<urlset><url><loc>${base}/uslugi</loc></url></urlset>`,
+      },
+      '/foreign-child.xml': { type: 'application/xml', body: '<urlset></urlset>' },
+      '/': { body: page('Главная', '<p>Компания, которая делает хорошее дело для людей.</p>') },
+      '/uslugi': { body: page('Услуги', '<p>Наши услуги и цены.</p>') },
+    };
+  });
+  t.after(() => site.close());
+  const result = await crawlSite(`${site.base}/`, { allowPrivate: true });
+  assert.equal(result.ok, true);
+  if (result.ok)
+    assert.deepEqual(
+      result.pages.map((item) => item.path),
+      ['/', '/uslugi'],
+    );
+  // Тот же сервер под другим именем (localhost) — другой хост: его карты не запрашивались.
+  assert.ok(!site.requests.includes('/foreign-sitemap.xml'), site.requests.join());
+  assert.ok(!site.requests.includes('/foreign-child.xml'), site.requests.join());
+  assert.ok(site.requests.includes('/sitemap.xml'));
+  assert.ok(site.requests.includes('/child.xml'));
+});
+
 test('внутренние адреса по-прежнему запрещены', async () => {
   const result = await crawlSite('http://127.0.0.1:9/');
   assert.equal(result.ok, false);

@@ -91,10 +91,59 @@ export function defaultWorkCatalog(language: Language): string {
   return workCatalogForPrompt(DEFAULT_CATALOG, language);
 }
 
+/**
+ * Пилот анализа v2 (docs/ANALYSIS_V2.md, раздел 3; аккаунты — product-switches.ts): три правила
+ * текущего промпта заменяются. Новых полей выхода нет — они придут в B3.
+ */
+const PILOT_RULES: Record<Language, ReadonlyArray<readonly [string, string]>> = {
+  en: [
+    [
+      '- Do not promise automation that the catalog does not have (for example, automatic email processing without the "email" capability).',
+      '- Keep high-value automations Ketner cannot do yet (CRM, calendar booking, follow-ups, messengers, email) as honest opportunities, with the real catalog ids in "requires" ("crm", "messengers", "email", "scheduled_runs"). The server marks them «soon». Never describe them as available now or say they run in Ketner today.',
+    ],
+    [
+      '- Order from the most useful and easiest to start.',
+      '- Order by value to this business: first what loses the most customers, money or time now. Ease of start does not change the order.',
+    ],
+    [
+      'Do not turn everything into a chatbot.',
+      'Do not turn everything into a chatbot. When the task has a business event (a new request, booking, order, payment, a form on the site), describe a workflow in "solution" as trigger → steps → result (for example: "A request comes from the site form → the agent asks two qualifying questions → the request goes to the sheet and the manager gets a Telegram message") and use "workflow". A chatbot only when the value is the conversation itself.',
+    ],
+  ],
+  ru: [
+    [
+      '- Не обещай автоматизацию, которой нет в каталоге (например, автоматическую обработку почты без возможности "email").',
+      '- Ценные автоматизации, которых Ketner пока не умеет (CRM, запись в календарь, повторные касания, мессенджеры, почта), оставляй честными возможностями, с настоящими id каталога в "requires" ("crm", "messengers", "email", "scheduled_runs"). Сервер пометит их «скоро». Никогда не описывай их как доступные сейчас и не пиши, что они уже работают в Ketner.',
+    ],
+    [
+      '- Порядок — от самых полезных и простых в старте.',
+      '- Порядок — по ценности для этого бизнеса: сначала то, из-за чего сейчас теряется больше всего клиентов, денег или времени. Простота старта на порядок не влияет.',
+    ],
+    [
+      'Не превращай всё в чат-бота.',
+      'Не превращай всё в чат-бота. Если у задачи есть событие бизнеса (новая заявка, запись, заказ, оплата, форма на сайте), опиши в "solution" рабочий процесс: событие → шаги → результат (например: «Заявка приходит с формы на сайте → агент задаёт два уточняющих вопроса → заявка уходит в таблицу, менеджер получает сообщение в Telegram») и укажи "workflow". Чат-бот — только когда ценность в самом разговоре.',
+    ],
+  ],
+};
+
+export type DiscoveryPromptVariant = 'current' | 'pilot';
+
 export function discoverySystemPrompt(
   language: Language,
   workCatalog: string = defaultWorkCatalog(language),
+  variant: DiscoveryPromptVariant = 'current',
 ): string {
+  const prompt = currentDiscoveryPrompt(language, workCatalog);
+  if (variant === 'current') return prompt;
+  let pilot = prompt;
+  for (const [from, to] of PILOT_RULES[language]) {
+    if (!pilot.includes(from)) throw new Error(`discovery pilot prompt: rule not found: ${from}`);
+    pilot = pilot.replace(from, to);
+  }
+  return pilot;
+}
+
+function currentDiscoveryPrompt(language: Language, workCatalog: string): string {
   if (language === 'en') {
     return `You are the analyst of Ketner AI. From the structured context of a person's situation, find ${OPPORTUNITIES_MIN}–${OPPORTUNITIES_MAX} concrete ways AI can help them, tied to their tasks. Work by the plan below: it is the same for every analysis.
 

@@ -1827,6 +1827,7 @@ export const en: Record<TranslationKey, string> = {
   'analysis.result.duration': 'Analysis time',
   'analysis.result.minSec': '{min} min {sec} s',
   'analysis.result.sec': '{sec} s',
+  'analysis.result.pilotModel': 'Pilot: opportunities found by {model}',
   'analysis.result.summaryTitle': 'Summary',
   'analysis.result.savingTitle': 'Potential time saved',
   'analysis.result.savingNote': 'based on the numbers you gave',

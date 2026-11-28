@@ -148,6 +148,8 @@ export interface AnalysisView {
   id: string;
   status: AnalysisStatus;
   mode: AnalysisMode;
+  /** Аккаунт в пилоте анализа v2 (сервер); у старого сервера поля нет. */
+  pilot?: boolean;
   language: Language;
   guest: boolean;
   inputText: string;
