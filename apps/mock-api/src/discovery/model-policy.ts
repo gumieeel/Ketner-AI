@@ -39,8 +39,9 @@ export const MODEL_BY_MODE: Readonly<Record<AnalysisMode, string>> = {
 const OUTPUT_TOKENS: Readonly<Record<AnalysisMode, Readonly<Record<StageName, number>>>> = {
   // Поиск возможностей отвечает ещё и работами по внедрению для сметы (pricing/), поэтому
   // потолок ответа выше, чем до сметы (было 4 000 / 4 000 / 8 000).
-  free: { context: 2_500, discovery: 5_000, plan: 2_000 },
-  paid: { context: 2_500, discovery: 5_000, plan: 4_000 },
+  // Поиск возможностей: 6 500 — с полями анализа v2 (lostNow, flow, valueRank) ответ длиннее.
+  free: { context: 2_500, discovery: 6_500, plan: 2_000 },
+  paid: { context: 2_500, discovery: 6_500, plan: 4_000 },
   deep: { context: 4_000, discovery: 9_500, plan: 6_000 },
 };
 

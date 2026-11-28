@@ -336,3 +336,137 @@ describe('отчёт без разовых смет; статус «С кома�
     await waitFor(() => expect(screen.getAllByText('Отменено').length).toBeGreaterThan(0));
   });
 });
+
+describe('отчёт анализа v2: группы, «что теряется», «как будет работать»', () => {
+  beforeEach(() => {
+    resetPreferences();
+    resetAuth();
+    setSiteFeatures({ discovery: true });
+  });
+  afterEach(() => {
+    setSiteFeatures(null);
+    vi.unstubAllGlobals();
+  });
+
+  const base = ANALYSIS.opportunities[0]!;
+  const v2 = [
+    {
+      ...base,
+      id: 'o1',
+      position: 0,
+      title: 'Ответы на заявки с сайта',
+      launch: 'team' as const,
+      group: 'main' as const,
+      valueRank: 2,
+      valueReason: 'Заявки ждут ответа до утра',
+      lostNow: {
+        text: 'Заявки после 18:00 ждут ответа до утра',
+        source: 'site' as const,
+        page: '/contacts',
+        evidence: 'Работаем с 9:00 до 18:00',
+      },
+      flow: {
+        trigger: 'Клиент оставляет заявку на сайте',
+        steps: ['Агент уточняет детали', 'Заявка уходит менеджеру'],
+        result: 'Ответ за минуту.',
+      },
+    },
+    {
+      ...base,
+      id: 'o2',
+      position: 1,
+      title: 'Агент на сайте',
+      launch: 'team' as const,
+      group: 'main' as const,
+      valueRank: 1,
+      valueReason: 'Больше всего вопросов',
+      lostNow: {
+        text: 'Менеджеры отвечают на одни и те же вопросы',
+        source: 'description' as const,
+        page: null,
+        evidence: 'клиенты пишут в WhatsApp',
+      },
+      flow: null,
+    },
+    {
+      ...base,
+      id: 'o3',
+      position: 2,
+      title: 'Таблица заявок',
+      launch: 'now' as const,
+      group: 'today' as const,
+      valueRank: 4,
+      valueReason: 'Не показывается вне главного',
+    },
+    { ...base, id: 'o4', position: 3, title: 'Посты по расписанию', group: 'other' as const },
+  ];
+  const source = {
+    ok: true,
+    url: 'https://shop.example.kz/',
+    pages: [],
+    review: [],
+  } as unknown as AnalysisView['source'];
+
+  it('три группы: главное по ценности (первое — крупно), «сегодня», остальное свёрнуто', async () => {
+    signIn();
+    installApi(ESTIMATE, { opportunities: v2 as never, source });
+    renderRoute('/analyses/a1');
+    const main = (
+      await screen.findByRole('heading', { name: 'Главное, что стоит автоматизировать' })
+    ).closest('section')!;
+    const titles = within(main)
+      .getAllByRole('heading', { level: 4 })
+      .map((node) => node.textContent);
+    expect(titles).toEqual(['Агент на сайте', 'Ответы на заявки с сайта']);
+    expect(within(main).getByText('Больше всего вопросов')).toBeVisible();
+
+    const today = screen
+      .getByRole('heading', { name: 'Можно запустить сегодня' })
+      .closest('section')!;
+    expect(within(today).getByRole('heading', { name: 'Таблица заявок' })).toBeVisible();
+    // Причина ценности — только в главном.
+    expect(screen.queryByText('Не показывается вне главного')).toBeNull();
+
+    const other = screen
+      .getByRole('heading', { name: 'Что ещё можно сделать' })
+      .closest('section')!;
+    expect(within(other).queryByRole('heading', { name: 'Посты по расписанию' })).toBeNull();
+    fireEvent.click(within(other).getByRole('button', { name: 'Ещё возможности: 1' }));
+    expect(within(other).getByRole('heading', { name: 'Посты по расписанию' })).toBeVisible();
+  });
+
+  it('«Сейчас теряется» со ссылкой на страницу сайта или «по вашим словам»; «Как будет работать»', async () => {
+    signIn();
+    installApi(ESTIMATE, { opportunities: v2 as never, source });
+    renderRoute('/analyses/a1');
+    const site = (await screen.findByRole('heading', { name: 'Ответы на заявки с сайта' })).closest(
+      'li',
+    )!;
+    const lost = within(site).getByTestId('lost-now');
+    expect(lost).toHaveTextContent('Сейчас теряется: Заявки после 18:00 ждут ответа до утра.');
+    expect(within(lost).getByRole('link', { name: '/contacts' })).toHaveAttribute(
+      'href',
+      'https://shop.example.kz/contacts',
+    );
+    expect(within(site).getByTestId('flow')).toHaveTextContent(
+      'Как будет работать: Клиент оставляет заявку на сайте → Агент уточняет детали → Заявка уходит менеджеру → Ответ за минуту',
+    );
+
+    const words = screen.getByRole('heading', { name: 'Агент на сайте' }).closest('li')!;
+    expect(within(words).getByTestId('lost-now')).toHaveTextContent('по вашим словам');
+    expect(within(words).queryByRole('link', { name: /\// })).toBeNull();
+    expect(within(words).queryByTestId('flow')).toBeNull();
+  });
+
+  it('анализ до v2 (без групп) — прежний список, без новых строк', async () => {
+    signIn();
+    installApi();
+    renderRoute('/analyses/a1');
+    await screen.findByRole('heading', { name: 'ИИ-консультант по товарам' });
+    expect(
+      screen.queryByRole('heading', { name: 'Главное, что стоит автоматизировать' }),
+    ).toBeNull();
+    expect(screen.queryByTestId('lost-now')).toBeNull();
+    expect(screen.queryByTestId('flow')).toBeNull();
+  });
+});

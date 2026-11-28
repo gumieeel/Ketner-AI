@@ -306,12 +306,12 @@
       "analysisPaid": {
         "model": "MiMo-V2.6 Pro",
         "typicalCredits": 10,
-        "maxCredits": 42
+        "maxCredits": 46
       },
       "analysisDeep": {
         "model": "Claude Sonnet 5.5",
         "typicalCredits": 91,
-        "maxCredits": 414
+        "maxCredits": 417
       },
       "planPaid": {
         "model": "MiMo-V2.6 Pro",

@@ -123,6 +123,60 @@ export function launchOf(
   return team ? 'team' : 'soon';
 }
 
+/**
+ * Группы отчёта (docs/ANALYSIS_V2.md, 3.1):
+ * - `main` — «Главное, что стоит автоматизировать»: до трёх возможностей по ценности для этого
+ *   бизнеса (`valueRank` 1–3), в том числе «скоро»;
+ * - `today` — «Можно запустить сегодня»: всё остальное со статусом «сейчас»;
+ * - `other` — «Что ещё можно сделать».
+ * У анализа без оценки ценности (до B3) групп нет (`null`): отчёт показывает прежний список.
+ */
+export type ReportGroup = 'main' | 'today' | 'other';
+
+function withGroups<T extends { id: string; valueRank: number | null; launch: LaunchStatus }>(
+  items: T[],
+): Array<T & { group: ReportGroup | null }> {
+  const ranked = items
+    .filter((item) => item.valueRank !== null)
+    .sort((a, b) => a.valueRank! - b.valueRank!);
+  if (ranked.length === 0) return items.map((item) => ({ ...item, group: null }));
+  const top = ranked.filter((item) => item.valueRank! <= 3).slice(0, 3);
+  const main = new Set((top.length > 0 ? top : ranked.slice(0, 1)).map((item) => item.id));
+  return items.map((item) => ({
+    ...item,
+    group: (main.has(item.id) ? 'main' : item.launch === 'now' ? 'today' : 'other') as ReportGroup,
+  }));
+}
+
+/**
+ * «Разбор сайта»: сначала находки модели с проверенной цитатой (до трёх), затем правила сервера по
+ * фактам; всего не больше шести, без повторов одной страницы с одним текстом.
+ */
+function reviewOf(
+  analysis: Analysis,
+  pages: string[],
+  facts: NonNullable<Extract<NonNullable<Analysis['source']>, { ok: true }>['facts']>,
+) {
+  const fromModel = (analysis.context?.siteFindings ?? [])
+    .slice(0, 3)
+    .map((finding) => ({ rule: 'site_finding', text: finding.issue, page: finding.page }));
+  const fromRules = siteReview(
+    facts,
+    pages,
+    analysis.context?.profile?.industry ?? null,
+    analysis.language,
+  ).map(({ rule, text, page }) => ({ rule: rule as string, text, page }));
+  const seen = new Set<string>();
+  return [...fromModel, ...fromRules]
+    .filter((item) => {
+      const key = `${item.page}|${item.text}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 6);
+}
+
 export function publicAnalysis(
   analysis: Analysis,
   opportunities: Opportunity[] = [],
@@ -165,29 +219,34 @@ export function publicAnalysis(
             // Прочитанные страницы и «Разбор сайта» (правила сервера по фактам, site-facts.ts).
             pages: (analysis.source.pages ?? []).map((page) => page.path),
             review: analysis.source.pages
-              ? siteReview(
-                  analysis.source.facts ?? [],
+              ? reviewOf(
+                  analysis,
                   analysis.source.pages.map((page) => page.path),
-                  analysis.context?.profile?.industry ?? null,
-                  analysis.language,
-                ).map(({ rule, text, page }) => ({ rule, text, page }))
+                  analysis.source.facts ?? [],
+                )
               : [],
           }
         : { url: analysis.source.url, ok: false, reason: analysis.source.reason }
       : null,
     saved: analysis.saved,
     stages: { context: stage('context'), discovery: stage('discovery') },
-    opportunities: [...opportunities]
-      .sort((a, b) => a.priority - b.priority)
-      // У возможностей до этапа A области и рецепта нет — отдаём null, а не пропуск поля.
-      .map(({ ownerId: _owner, analysisId: _analysis, ...item }) => ({
-        ...item,
-        area: item.area ?? null,
-        // Рецепт, который сейчас недоступен (личный помощник при закрытом чате), не предлагается и в
-        // анализах, сохранённых раньше.
-        recipe: item.recipe && RECIPES[item.recipe].available ? item.recipe : null,
-        launch: launchOf(item, options.teamIds?.has(item.id) ?? false),
-      })),
+    opportunities: withGroups(
+      [...opportunities]
+        .sort((a, b) => a.priority - b.priority)
+        // У возможностей до этапа A области и рецепта нет — отдаём null, а не пропуск поля.
+        .map(({ ownerId: _owner, analysisId: _analysis, ...item }) => ({
+          ...item,
+          area: item.area ?? null,
+          // Рецепт, который сейчас недоступен (личный помощник при закрытом чате), не предлагается и
+          // в анализах, сохранённых раньше.
+          recipe: item.recipe && RECIPES[item.recipe].available ? item.recipe : null,
+          launch: launchOf(item, options.teamIds?.has(item.id) ?? false),
+          lostNow: item.lostNow ?? null,
+          flow: item.flow ?? null,
+          valueRank: item.valueRank ?? null,
+          valueReason: item.valueReason ?? '',
+        })),
+    ),
     cost: {
       /** Списано с кредитов пользователя (0 у бесплатного анализа). */
       chargedCredits: chargedCredits(analysis),

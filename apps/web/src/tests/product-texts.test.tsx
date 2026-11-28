@@ -95,6 +95,22 @@ describe('тексты о продукте', () => {
     expect(en['builder.bot.diagram.label']).toBe('Agent process diagram');
   });
 
+  it('отчёт анализа говорит словами покупателя: без служебных слов (RU/EN)', () => {
+    // Анализ v2, B3 (docs/ANALYSIS_V2.md §3): «рецепт», «выполнимость», «каталог» и т. п. — внутренние
+    // слова; человеку они ничего не говорят. Сметы и «под ключ» отчёт не показывает вовсе.
+    const BANNED =
+      /рецепт|выполнимост|реализуемост|capabilit|каталог|смет|под ключ|коммерческ[а-яё]* предложени|recipe|feasib|turnkey|commercial proposal/i;
+    for (const dict of [ru, en]) {
+      const hits = Object.entries(dict).filter(
+        ([key, value]) => key.startsWith('analysis.') && BANNED.test(value),
+      );
+      expect(hits).toEqual([]);
+    }
+    expect(ru['analysis.groups.main']).toBe('Главное, что стоит автоматизировать');
+    expect(ru['analysis.groups.today']).toBe('Можно запустить сегодня');
+    expect(ru['analysis.groups.other']).toBe('Что ещё можно сделать');
+  });
+
   it('«Что нового»: последняя запись — внешние сервисы в тарифах', () => {
     const [latest] = RELEASES;
     expect(latest?.date).toBe('2026-11-25');
